@@ -50,6 +50,7 @@ export default function StudioSystem() {
 
     // Admin Actions State
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null); // New State for Booking Modal
     const [showAddModal, setShowAddModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [newPin, setNewPin] = useState('');
@@ -146,6 +147,11 @@ export default function StudioSystem() {
         await addDoc(collection(db, "bookings"), { ...book, status: 'confirmed' });
         alert("✨ ¡Reserva Enviada! Te esperamos pronto.");
         if (view === 'CLIENT_BOOKING') setView('LANDING'); // Volver al inicio despues de reservar
+    };
+
+    const handleConfirmWhatsApp = (book: Booking) => {
+        const msg = `Hola ${book.clientName}! 💅 Te escribimos de *Mivis Studio* para confirmar tu cita de hoy a las *${book.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}*. ¿Nos confirmas tu asistencia? ✨`;
+        window.open(`https://wa.me/51${book.clientPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     };
 
     const handleDeleteService = async (id: string) => await deleteDoc(doc(db, "services", id));
@@ -279,7 +285,7 @@ export default function StudioSystem() {
 
                 <AnimatePresence mode='wait'>
                     {activeTab === 'BOOKINGS' && (
-                        <BookingSection bookings={bookings} employees={employees} services={services} onAdd={handleBooking} onDelete={handleDeleteBooking} />
+                        <BookingSection bookings={bookings} employees={employees} services={services} onAdd={handleBooking} onDelete={handleDeleteBooking} onSelect={setSelectedBooking} />
                     )}
 
                     {activeTab === 'FINANCE' && (
@@ -325,6 +331,51 @@ export default function StudioSystem() {
                             <button onClick={handleUpdatePin} className="btn-primary w-full py-4 mt-6">Actualizar Clave</button>
                         </Modal>
                     )}
+
+                    {/* MODAL DETALLE DE CITA */}
+                    {selectedBooking && (
+                        <Modal onClose={() => setSelectedBooking(null)}>
+                            <div className="text-center relative">
+                                <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-2`}>Detalle de Cita</h3>
+                                {new Date().getTime() > selectedBooking.date.getTime() - 900000 && new Date().getTime() < selectedBooking.date.getTime() && (
+                                    <div className="bg-red-500/20 text-red-400 text-xs font-bold px-3 py-1 rounded-full inline-block mb-4 animate-pulse border border-red-500/50">
+                                        ⚠️ ¡La cita es en 15 min!
+                                    </div>
+                                )}
+                                <div className="space-y-6 text-left bg-black/20 p-6 rounded-2xl border border-white/5">
+                                    <div>
+                                        <p className="text-[10px] text-white/40 uppercase font-bold">Cliente</p>
+                                        <p className="text-xl text-white font-medium">{selectedBooking.clientName}</p>
+                                        <p className="text-sm text-emerald-400 font-mono">{selectedBooking.clientPhone}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-[10px] text-white/40 uppercase font-bold">Fecha</p>
+                                            <p className="text-white">{selectedBooking.date.toLocaleDateString()}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-white/40 uppercase font-bold">Hora</p>
+                                            <p className="text-white text-lg font-bold text-yellow-500">{selectedBooking.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-white/40 uppercase font-bold">Servicio</p>
+                                        <p className="text-white">{selectedBooking.service}</p>
+                                        <p className="text-xs text-white/50">con {employees.find(e => e.id === selectedBooking.professionalId)?.name || 'Especialista'}</p>
+                                    </div>
+                                </div>
+
+                                <button onClick={() => handleConfirmWhatsApp(selectedBooking)} className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold py-4 rounded-xl mt-6 flex items-center justify-center gap-2 shadow-lg transition-all">
+                                    <Send className="w-5 h-5" /> Confirmar por WhatsApp
+                                </button>
+
+                                <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20">
+                                    Cancelar Cita
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
+
                     {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
                     {selectedEmp && (
                         <Modal onClose={() => setSelectedEmp(null)}>
@@ -344,7 +395,7 @@ export default function StudioSystem() {
 
 // --- SUB-COMPONENTES AUXILIARES ---
 // (BookingSection, BookingForm, FinanceSection, etc. se mantienen igual pero integrados en el dashboard)
-function BookingSection({ bookings, employees, services, onAdd, onDelete }: any) {
+function BookingSection({ bookings, employees, services, onAdd, onDelete, onSelect }: any) {
     const sortedBookings = [...bookings].sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
     return (
         <div className="grid md:grid-cols-2 gap-8 animate-in fade-in">
@@ -361,14 +412,20 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete }: any)
                 ) : (
                     <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">{sortedBookings.map((b: Booking) => {
                         const emp = employees.find((e: Employee) => e.id === b.professionalId);
+                        // Alert Logic: Show red dot if appointment is within 15 minutes
+                        const isSoon = new Date().getTime() > b.date.getTime() - 900000 && new Date().getTime() < b.date.getTime();
+
                         return (
-                            <div key={b.id} className="bg-white/5 border-l-4 border-l-yellow-600 p-4 rounded-r-xl flex justify-between items-center group">
+                            <div key={b.id} onClick={() => onSelect(b)} className={`bg-white/5 border-l-4 p-4 rounded-r-xl flex justify-between items-center group cursor-pointer hover:bg-white/10 transition-colors ${isSoon ? 'border-l-red-500 bg-red-500/5' : 'border-l-yellow-600'}`}>
                                 <div>
-                                    <h4 className="font-bold text-white">{b.clientName}</h4>
+                                    <h4 className="font-bold text-white flex items-center gap-2">
+                                        {b.clientName}
+                                        {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
+                                    </h4>
                                     <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                     <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span> • <span className="text-yellow-500/80">{emp?.name}</span></div>
                                 </div>
-                                <button onClick={() => onDelete(b.id)} className="p-2 hover:bg-white/10 rounded-full text-white/20 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                <div className="text-white/20 group-hover:text-yellow-500 transition-colors"><ChevronRight className="w-5 h-5" /></div>
                             </div>
                         )
                     })}</div>

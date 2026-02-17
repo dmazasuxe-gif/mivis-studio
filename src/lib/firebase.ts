@@ -1,13 +1,5 @@
-// lib/firebase.ts
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-
-// 🔥 AQUÍ VAS A PEGAR TUS CLAVES DE FIREBASE 🔥
-// 1. Ve a console.firebase.google.com
-// 2. Crea un proyecto nuevo (ej. "Mivis Studio")
-// 3. Ve a Configuración del Proyecto (rueda dentada) -> General
-// 4. Baja hasta "Tus apps" -> Selecciona el icono </> (Web)
-// 5. Copia el objeto "const firebaseConfig = { ... }" y pégalo aquí abajo:
 
 const firebaseConfig = {
     apiKey: "AIzaSyDZue-YNNb1s4YH4oqTkozsBb3UxGNGAuc",
@@ -19,6 +11,8 @@ const firebaseConfig = {
     measurementId: "G-EK0M3YDXK2"
 };
 
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// Initialize Firebase
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+
+export { db };

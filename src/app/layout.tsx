@@ -10,8 +10,34 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "MIVIS STUDIO - Exclusivity & Beauty",
-  description: "Sistema de Gestión Premium",
+  title: {
+    default: "MIVIS STUDIO | Salón de Belleza & Spa Exclusivo",
+    template: "%s | MIVIS STUDIO"
+  },
+  description: "Reserva tu cita en Mivis Studio. Expertos en Manicure, Pedicure, Uñas Acrílicas, Maquillaje Profesional y Estilismo. La mejor experiencia de belleza y cuidado personal.",
+  keywords: ["Mivis Studio", "Salón de Belleza", "Manicure", "Pedicure", "Uñas Acrílicas", "Maquillaje", "Estilismo", "Belleza", "Spa", "Citas Online"],
+  authors: [{ name: "Mivis Studio Team" }],
+  creator: "Mivis Studio",
+  publisher: "Mivis Studio",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  openGraph: {
+    title: "MIVIS STUDIO | Tu Momento de Brillar",
+    description: "Agenda tu cita hoy mismo. Servicios exclusivos de uñas, maquillaje y cabello en un ambiente de lujo.",
+    url: 'https://mivisstudio.com',
+    siteName: 'Mivis Studio',
+    locale: 'es_PE',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "MIVIS STUDIO | Salón de Belleza",
+    description: "Expertos en belleza y cuidado personal. Reserva tu cita online.",
+  },
+  category: 'beauty',
 };
 
 export default function RootLayout({

@@ -51,6 +51,8 @@ export default function StudioSystem() {
     // Admin Actions State
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [newPin, setNewPin] = useState('');
 
     // Inputs CRUD
     const [newEmpName, setNewEmpName] = useState('');
@@ -109,6 +111,15 @@ export default function StudioSystem() {
             await addDoc(collection(db, "employees"), { name: 'Yolita', role: 'Maquilladora', avatarSeed: 'Yolita', commission: 40 });
             ["Cortes", "Maquillaje", "Manicure", "Pedicure", "Laceados", "Tintes"].forEach(async s => await addDoc(collection(db, "services"), { name: s }));
         }
+    };
+
+    const handleUpdatePin = async () => {
+        if (newPin.length < 4) return alert("El PIN debe tener al menos 4 dígitos");
+        await setDoc(doc(db, "settings", "config"), { pin: newPin }, { merge: true });
+        setAdminPin(newPin);
+        setNewPin('');
+        setShowSettingsModal(false);
+        alert("🔒 ¡Contraseña Actualizada Correctamente!");
     };
 
     // ... (Resto de Handlers CRUD igual que antes, simplificados para brevedad) ...
@@ -248,6 +259,7 @@ export default function StudioSystem() {
                         <NavBtn icon={<Wallet />} label="Finanzas" active={activeTab === 'FINANCE'} onClick={() => setActiveTab('FINANCE')} />
                         <NavBtn icon={<TrendingUp />} label="Reportes" active={activeTab === 'REPORTS'} onClick={() => setActiveTab('REPORTS')} />
                     </div>
+                    <button onClick={() => setShowSettingsModal(true)} className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-full border border-transparent hover:border-white/10 transition-all ml-2"><Settings className="w-4 h-4" /></button>
                     <button onClick={() => setView('LANDING')} className="p-2 text-red-400 hover:bg-red-500/10 rounded-full border border-transparent hover:border-red-500/20 transition-all ml-2"><LogOut className="w-4 h-4" /></button>
                 </div>
             </header>
@@ -300,6 +312,19 @@ export default function StudioSystem() {
 
                 {/* MODALES & UTILS */}
                 <AnimatePresence>
+                    {showSettingsModal && (
+                        <Modal onClose={() => setShowSettingsModal(false)}>
+                            <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-2 text-center`}>Seguridad</h3>
+                            <p className="text-white/50 text-xs text-center mb-6">Cambia tu clave de acceso de administrador.</p>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nueva Clave (PIN)</label>
+                                    <input type="text" placeholder="Ej. 2024" className="input-modern text-center tracking-[0.5em] font-bold text-lg" maxLength={6} value={newPin} onChange={e => setNewPin(e.target.value)} />
+                                </div>
+                            </div>
+                            <button onClick={handleUpdatePin} className="btn-primary w-full py-4 mt-6">Actualizar Clave</button>
+                        </Modal>
+                    )}
                     {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
                     {selectedEmp && (
                         <Modal onClose={() => setSelectedEmp(null)}>

@@ -211,7 +211,7 @@ export default function StudioSystem() {
         return (
             <div className="min-h-screen bg-[#061814] text-[#e0e7e4] font-sans flex flex-col relative overflow-hidden">
                 {/* 🏷️ Fondo Personalizado: Asegúrate de guardar 'fondo.jpg' en la carpeta public */}
-                <div className="absolute inset-0 bg-[url('/fondo.jpg')] bg-cover bg-center opacity-40 blur-[3px]"></div>
+                <div className="absolute inset-0 bg-[url('/fondo.jpeg')] bg-cover bg-center opacity-40 blur-[3px]"></div>
                 <div className="absolute inset-0 bg-gradient-to-br from-[#061814]/90 via-[#061814]/60 to-transparent"></div>
 
                 <div className="p-6 relative z-10"><button onClick={() => setView('LANDING')} className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white hover:bg-white/20 hover:scale-105 transition-all flex items-center gap-2 text-sm border border-white/5 shadow-lg"><ChevronRight className="rotate-180 w-4 h-4" /> Volver al Inicio</button></div>

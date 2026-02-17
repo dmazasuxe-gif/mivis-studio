@@ -5,7 +5,7 @@ import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store
+    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,11 +15,10 @@ import { Playfair_Display, Inter } from 'next/font/google';
 import { db } from '@/lib/firebase';
 import {
     collection, addDoc, deleteDoc, updateDoc, doc,
-    onSnapshot, query, orderBy, getDocs, getDoc, setDoc
+    onSnapshot, query, orderBy, getDocs, getDoc, setDoc, enableIndexedDbPersistence
 } from 'firebase/firestore';
 
-const playfair = Playfair_Display({ subsets: ['latin'] });
-const inter = Inter({ subsets: ['latin'] });
+const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // Preload font
 
 // --- Tipos Adaptados para Firebase ---
 type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; };
@@ -40,11 +39,11 @@ export default function StudioSystem() {
     const [adminPin, setAdminPin] = useState("1234"); // Default PIN
 
     // UI State
-    const [loaded, setLoaded] = useState(false);
     const [view, setView] = useState<'LANDING' | 'PIN_ENTRY' | 'ADMIN_DASHBOARD' | 'CLIENT_BOOKING'>('LANDING');
     const [activeTab, setActiveTab] = useState<'HOME' | 'FINANCE' | 'REPORTS' | 'BOOKINGS'>('HOME'); // Sub-tabs for Admin
     const [pinInput, setPinInput] = useState("");
     const [pinError, setPinError] = useState(false);
+    const [isOffline, setIsOffline] = useState(false); // New Offline State
 
     // Admin Actions State
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -60,29 +59,28 @@ export default function StudioSystem() {
     const [isManaging, setIsManaging] = useState(false);
     const [newServName, setNewServName] = useState('');
 
-    // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE
+    // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE (Optimized)
     useEffect(() => {
-        // Cargar Configuración (PIN)
+        // Try to enable offline persistence (Turboload features)
+        // Note: This might fail in some browsers first load, catch silently
+        try { enableIndexedDbPersistence(db).catch(() => { }); } catch (e) { }
+
         const loadSettings = async () => {
-            const docRef = doc(db, "settings", "config");
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                setAdminPin(docSnap.data().pin || "1234");
-            } else {
-                // Crear config por defecto si no existe
-                await setDoc(doc(db, "settings", "config"), { pin: "1234" });
-            }
+            try {
+                const docRef = doc(db, "settings", "config");
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) setAdminPin(docSnap.data().pin || "1234");
+            } catch (e) { console.log("Offline mode or error loading settings"); setIsOffline(true); }
         };
         loadSettings();
 
-        // Escuchar Colecciones
+        // Listeners start immediately (loading state removed for perceived speed)
         const unsubEmp = onSnapshot(collection(db, "employees"), (snap) => setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee))));
         const unsubServ = onSnapshot(collection(db, "services"), (snap) => setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as ServiceItem))));
         const unsubTrans = onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), (snap) => setTransactions(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Transaction; })));
         const unsubExp = onSnapshot(query(collection(db, "expenses"), orderBy("date", "desc")), (snap) => setExpenses(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as SimpleExpense; })));
         const unsubBook = onSnapshot(query(collection(db, "bookings")), (snap) => {
             setBookings(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Booking; }));
-            setLoaded(true);
         });
 
         return () => { unsubEmp(); unsubServ(); unsubTrans(); unsubExp(); unsubBook(); };
@@ -113,14 +111,29 @@ export default function StudioSystem() {
     // ... (Resto de Handlers CRUD igual que antes, simplificados para brevedad) ...
     const handleRegisterExpense = async (newExp: any) => await addDoc(collection(db, "expenses"), { ...newExp, date: new Date() });
     const handleDeleteExpense = async (id: string) => { if (confirm('¿Eliminar gasto?')) await deleteDoc(doc(db, "expenses", id)); };
+    // FIX: Employee Create now closes modal
+    const handleCreateEmployee = async () => {
+        if (!newEmpName) return;
+        await addDoc(collection(db, "employees"), { name: newEmpName, role: newEmpRole || 'Profesional', photo: newEmpPhoto || null, avatarSeed: newEmpName, commission: Number(newEmpComm) || 40 });
+        setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null);
+        setShowAddModal(false); // Close Modal Automatically!
+        alert("✅ Trabajador Creado Correctamente");
+    };
+    // FIX: Service Create now clears input
+    const handleCreateService = async () => {
+        if (newServName) {
+            await addDoc(collection(db, "services"), { name: newServName });
+            setNewServName(''); // Clear input automatically!
+        }
+    };
+
     const handleEmployeeDelete = async (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (confirm('⚠️ ¿Eliminar miembro?')) await deleteDoc(doc(db, "employees", id)); };
     const handleBooking = async (book: any) => {
         await addDoc(collection(db, "bookings"), { ...book, status: 'confirmed' });
         alert("✨ ¡Reserva Enviada! Te esperamos pronto.");
         if (view === 'CLIENT_BOOKING') setView('LANDING'); // Volver al inicio despues de reservar
     };
-    const handleCreateEmployee = async () => { if (!newEmpName) return; await addDoc(collection(db, "employees"), { name: newEmpName, role: newEmpRole || 'Profesional', photo: newEmpPhoto || null, avatarSeed: newEmpName, commission: Number(newEmpComm) || 40 }); setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null); setShowAddModal(false); };
-    const handleCreateService = async () => { if (newServName) { await addDoc(collection(db, "services"), { name: newServName }); setNewServName(''); } };
+
     const handleDeleteService = async (id: string) => await deleteDoc(doc(db, "services", id));
     const handleTransaction = async () => { const p = parseFloat(manPrice); if (!selectedEmp || isNaN(p) || p <= 0) return; await addDoc(collection(db, "transactions"), { employeeId: selectedEmp.id, serviceName: selService, price: p, date: new Date() }); setSelService(null); setManPrice(''); alert('Cobro registrado ☁️'); };
     const handleUpdateCommission = async (id: string, val: string) => await updateDoc(doc(db, "employees", id), { commission: val });
@@ -129,8 +142,8 @@ export default function StudioSystem() {
 
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewEmpPhoto(reader.result as string); reader.readAsDataURL(file); } };
 
-
-    if (!loaded) return <div className="h-screen flex flex-col items-center justify-center bg-[#0f2a24] text-emerald-200"><Cloud className="w-12 h-12 animate-pulse mb-4" /><p className={playfair.className}>Conectando Mivis Studio...</p></div>;
+    // TURBO MODE: No loading screen blocking interaction. 
+    // We render the UI immediately, data will pop in when ready.
 
     // --- VISTAS ---
 
@@ -141,7 +154,7 @@ export default function StudioSystem() {
                 <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop')] bg-cover bg-center opacity-20"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#061814] via-[#061814]/80 to-transparent"></div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 max-w-md w-full text-center space-y-8">
+                <div className="relative z-10 max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
                     <div className="mb-8">
                         <h1 className={`${playfair.className} text-5xl md:text-6xl text-yellow-500 mb-2 drop-shadow-lg`}>MIVIS</h1>
                         <p className="text-emerald-200/80 tracking-[0.4em] text-sm uppercase">Studio & Beauty</p>
@@ -155,7 +168,7 @@ export default function StudioSystem() {
                             <Lock className="w-4 h-4" /> Soy Administrador
                         </button>
                     </div>
-                </motion.div>
+                </div>
             </div>
         )
     }
@@ -164,7 +177,7 @@ export default function StudioSystem() {
     if (view === 'PIN_ENTRY') {
         return (
             <div className="min-h-screen bg-[#0f2a24] flex items-center justify-center p-4">
-                <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
                     <Lock className="w-8 h-8 text-yellow-500 mx-auto mb-6" />
                     <h2 className={`${playfair.className} text-2xl text-white mb-6`}>Acceso Privado</h2>
                     <div className="flex justify-center gap-2 mb-8">
@@ -237,7 +250,9 @@ export default function StudioSystem() {
             </div>
 
             <main className="max-w-6xl mx-auto p-6">
-                {employees.length === 0 && !loaded && <button onClick={handleSeedDB} className="mx-auto block bg-blue-600 px-6 py-3 rounded-full mb-8">🛠️ Inicializar DB</button>}
+                {/* Empty State / Offline Notice */}
+                {employees.length === 0 && <div className="text-center py-6 text-white/30 text-sm">Cargando base de datos... <br />(Si es nuevo, inicializa abajo)</div>}
+                {employees.length === 0 && <button onClick={handleSeedDB} className="mx-auto block bg-blue-600 px-6 py-3 rounded-full mb-8 text-xs">🛠️ Inicializar DB</button>}
 
                 <AnimatePresence mode='wait'>
                     {activeTab === 'BOOKINGS' && (
@@ -373,7 +388,7 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: an
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><StatCard label="Ingresos" val={monthlyIncome} icon={<ArrowDownCircle />} color="text-emerald-400" bg="bg-emerald-500/10" /><StatCard label="Gastos" val={monthlyExpenses} icon={<ArrowUpCircle />} color="text-rose-400" bg="bg-rose-500/10" /><StatCard label="Caja Neta" val={profit} icon={<Wallet />} color={profit >= 0 ? "text-white" : "text-red-400"} bg={profit >= 0 ? "bg-white/10" : "bg-red-500/10"} /></div>
             <div className="grid md:grid-cols-2 gap-6 mt-4">
                 <div className="bg-white/5 border border-white/10 p-6 rounded-2xl h-fit"><h3 className="font-bold text-emerald-200 mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> Registrar Salida</h3><div className="space-y-4"><div><label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Concepto</label><select className="input-modern" value={cat} onChange={e => setCat(e.target.value)}>{EXPENSE_CATS.map(c => <option key={c} value={c} className="bg-[#0f2a24]">{c}</option>)}</select></div><div><label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Monto (S/.)</label><input type="number" placeholder="0.00" className="input-modern font-mono font-bold text-lg" value={amt} onChange={e => setAmt(e.target.value)} /></div><div><label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nota (Opcional)</label><input type="text" placeholder="Ej. Pago recibo..." className="input-modern" value={desc} onChange={e => setDesc(e.target.value)} /></div><button onClick={() => { if (!amt) return; onAdd({ category: cat, amount: parseFloat(amt), description: desc }); setAmt(''); setDesc(''); }} className="btn-primary w-full py-4 mt-2 bg-rose-600 from-rose-600 to-rose-500 shadow-rose-900/30 text-white">Guardar Gasto</button></div></div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col max-h-[500px]"><h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0">Historial (Mes Actual)</h3><div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-2">{[...expenses].filter((e: any) => isCurrentMonth(e.date)).sort((a: any, b: any) => b.date.getTime() - a.date.getTime()).map((exp: any) => (<div key={exp.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors group"><div><p className="font-bold text-rose-300">{exp.category}</p><p className="text-[10px] text-white/40">{exp.description || exp.date.toLocaleDateString()}</p></div><div className="flex items-center gap-3"><span className="font-mono text-white font-bold">- S/. {exp.amount.toFixed(2)}</span><button onClick={() => onDelete(exp.id)} className="text-white/20 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button></div></div>))}</div></div>
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col max-h-[500px]"><h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0">Historial (Mes Actual)</h3><div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-2">{[...expenses].filter((e: any) => isCurrentMonth(e.date)).sort((a: any, b: any) => b.date.getTime() - a.date.getTime()).map((exp: any) => (<div key={exp.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors group"><div><p className="font-bold text-rose-300">{exp.category}</p><p className="text-[10px] text-white/50 truncate w-32">{exp.description || exp.date.toLocaleDateString()}</p></div><div className="flex items-center gap-3"><span className="font-mono text-white font-bold">- S/. {exp.amount.toFixed(2)}</span><button onClick={() => onDelete(exp.id)} className="text-white/20 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button></div></div>))}</div></div>
             </div>
         </motion.div>
     );
@@ -384,6 +399,24 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
     const getRange = () => { const d = new Date(now); d.setHours(0, 0, 0, 0); let start = new Date(d); let end = new Date(d); if (tab === 'day') { start.setDate(d.getDate() + offset); end = new Date(start); } else if (tab === 'week') { const currentDay = d.getDay(); const diffParsed = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + (offset * 7); start.setDate(diffParsed); end = new Date(start); end.setDate(start.getDate() + 6); } else { start.setMonth(start.getMonth() + offset); start.setDate(1); end = new Date(start); end.setMonth(end.getMonth() + 1); end.setDate(0); } end.setHours(23, 59, 59, 999); return { start, end }; };
     const { start, end } = getRange();
     let rangeLabel = ""; if (tab === 'day') rangeLabel = start.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' }); else if (tab === 'week') rangeLabel = `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-PE', { month: 'short' })}`; else rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+
+    const handleWhatsApp = (emp: Employee) => {
+        // Calculate WEEKLY stats specifically for the report message, regardless of current tab view to match user preference
+        const d = new Date(); d.setHours(0, 0, 0, 0);
+        const currentDay = d.getDay();
+        const diffParsed = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
+        const weekStart = new Date(d); weekStart.setDate(diffParsed);
+        const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+
+        const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= weekStart && t.date <= weekEnd);
+        const total = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const comm = Number(emp.commission) || 0; const pay = (total * comm) / 100;
+
+        const weekLabel = `${weekStart.getDate()} - ${weekEnd.getDate()} ${weekEnd.toLocaleDateString('es-PE', { month: 'short' })}`;
+
+        const msg = `*Reporte Semanal MIVIS STUDIO* 💄\n\nHola ${emp.name},\nResumen de la semana: ${weekLabel}\n\n✅ *Servicios:* ${empTrans.length}\n💰 *Ventas Totales:* S/. ${total.toFixed(2)}\n📊 *Comisión:* ${comm}%\n\n💵 *Total a Pagar:* S/. ${pay.toFixed(2)}\n\nGracias por tu trabajo! ✨`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    };
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-white space-y-6">
             <div className="flex justify-between items-center"><h2 className={`text-2xl text-yellow-500 ${playfair.className}`}>Reportes</h2><div className="flex bg-white/5 p-1 rounded-lg">{['day', 'week', 'month'].map((t: any) => (<button key={t} onClick={() => { setTab(t); setOffset(0) }} className={`px-3 py-1 text-xs uppercase font-bold rounded ${tab === t ? 'bg-emerald-500 text-black' : 'text-white/50'}`}>{t === 'day' ? 'Diario' : t === 'week' ? 'Semana' : 'Mes'}</button>))}</div></div>
@@ -397,7 +430,11 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
                     </div>
                 </div>
             ) : (
-                <div className="space-y-3">{employees.map((emp: Employee) => { const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = emp.commission === '' ? 0 : Number(emp.commission); const payment = (totalGen * commValue) / 100; return (<div key={emp.id} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors"><div className="flex items-center gap-3"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" /><div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div></div><div className="flex items-center gap-4 justify-end"><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p><div className="flex items-center justify-end gap-1"><input type="text" className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} /><span className="text-xs text-yellow-600">%</span></div></div><div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div></div></div>); })}</div>
+                <div className="space-y-3">{employees.map((emp: Employee) => {
+                    const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = emp.commission === '' ? 0 : Number(emp.commission); const payment = (totalGen * commValue) / 100; return (<div key={emp.id} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors"><div className="flex items-center gap-3"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" /><div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div></div><div className="flex items-center gap-4 justify-end">
+                        <button onClick={() => handleWhatsApp(emp)} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
+                        <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p><div className="flex items-center justify-end gap-1"><input type="text" className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} /><span className="text-xs text-yellow-600">%</span></div></div><div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div></div></div>);
+                })}</div>
             )}
         </motion.div>
     );

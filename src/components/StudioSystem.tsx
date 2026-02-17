@@ -14,6 +14,9 @@ import { Playfair_Display, Inter } from 'next/font/google';
 // 🔥 FIREBASE IMPORTS
 import { db } from '@/lib/firebase';
 import {
+    initializeApp, getApps, getApp
+} from "firebase/app";
+import {
     collection, addDoc, deleteDoc, updateDoc, doc,
     onSnapshot, query, orderBy, getDocs, getDoc, setDoc, enableIndexedDbPersistence
 } from 'firebase/firestore';
@@ -62,7 +65,7 @@ export default function StudioSystem() {
     // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE (Optimized)
     useEffect(() => {
         // Try to enable offline persistence (Turboload features)
-        // Note: This might fail in some browsers first load, catch silently
+        // Note: This might fail in some browsers or if multiple tabs open, catch silently
         try { enableIndexedDbPersistence(db).catch(() => { }); } catch (e) { }
 
         const loadSettings = async () => {
@@ -70,7 +73,7 @@ export default function StudioSystem() {
                 const docRef = doc(db, "settings", "config");
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) setAdminPin(docSnap.data().pin || "1234");
-            } catch (e) { console.log("Offline mode or error loading settings"); setIsOffline(true); }
+            } catch (e) { setIsOffline(true); }
         };
         loadSettings();
 
@@ -203,17 +206,25 @@ export default function StudioSystem() {
         )
     }
 
-    // 3. CLIENT BOOKING VIEW
+    // 3. CLIENT BOOKING VIEW (UPDATED 💎)
     if (view === 'CLIENT_BOOKING') {
         return (
-            <div className="min-h-screen bg-[#0f2a24] text-[#e0e7e4] font-sans flex flex-col">
-                <div className="p-4"><button onClick={() => setView('LANDING')} className="text-white/50 hover:text-white flex items-center gap-2 text-sm"><ChevronRight className="rotate-180 w-4 h-4" /> Volver</button></div>
-                <div className="flex-1 flex flex-col items-center justify-center p-6">
-                    <h1 className={`${playfair.className} text-3xl text-yellow-500 mb-2`}>Tu Cita</h1>
-                    <p className="text-emerald-300 text-xs tracking-[0.2em] uppercase mb-8">Reserva en Mivis Studio</p>
-                    <div className="w-full max-w-md bg-white/5 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
+            <div className="min-h-screen bg-[#061814] text-[#e0e7e4] font-sans flex flex-col relative overflow-hidden">
+                {/* Nuevo Fondo de Manos/Uñas */}
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1632922267756-9b71242b1592?q=80&w=2687&auto=format&fit=crop')] bg-cover bg-center opacity-30 blur-[2px]"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-[#061814]/90 via-[#061814]/70 to-transparent"></div>
+
+                <div className="p-6 relative z-10"><button onClick={() => setView('LANDING')} className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white hover:bg-white/20 hover:scale-105 transition-all flex items-center gap-2 text-sm border border-white/5 shadow-lg"><ChevronRight className="rotate-180 w-4 h-4" /> Volver al Inicio</button></div>
+
+                <div className="flex-1 flex flex-col items-center justify-center p-4 relative z-10">
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-lg bg-[#0f2a24]/60 backdrop-blur-xl rounded-[2.5rem] p-8 md:p-10 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <div className="text-center mb-8">
+                            <h1 className={`${playfair.className} text-4xl text-yellow-500 mb-2 drop-shadow-sm`}>Tu Cita</h1>
+                            <div className="h-1 w-16 bg-gradient-to-r from-transparent via-emerald-500 to-transparent mx-auto rounded-full mb-3"></div>
+                            <p className="text-emerald-100/70 text-sm font-light">Completa tus datos para brillar hoy.</p>
+                        </div>
                         <BookingForm services={services} employees={employees} onSubmit={handleBooking} isClient={true} />
-                    </div>
+                    </motion.div>
                 </div>
             </div>
         )
@@ -251,7 +262,7 @@ export default function StudioSystem() {
 
             <main className="max-w-6xl mx-auto p-6">
                 {/* Empty State / Offline Notice */}
-                {employees.length === 0 && <div className="text-center py-6 text-white/30 text-sm">Cargando base de datos... <br />(Si es nuevo, inicializa abajo)</div>}
+                {employees.length === 0 && <div className="text-center py-6 text-white/30 text-sm">Cargando base de datos... </div>}
                 {employees.length === 0 && <button onClick={handleSeedDB} className="mx-auto block bg-blue-600 px-6 py-3 rounded-full mb-8 text-xs">🛠️ Inicializar DB</button>}
 
                 <AnimatePresence mode='wait'>
@@ -302,7 +313,7 @@ export default function StudioSystem() {
                     )}
                 </AnimatePresence>
             </main>
-            <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } `}</style></div>
+            <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div>
     );
 }
 
@@ -358,17 +369,43 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
     };
 
     return (
-        <div className="space-y-4">
-            <input placeholder="Nombre Cliente" className="input-modern" value={cName} onChange={e => setCName(e.target.value)} />
-            <div className="grid grid-cols-2 gap-4">
-                <select className="input-modern" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-black">{s.name}</option>)}</select>
-                <select className="input-modern" value={bProf} onChange={e => setBProf(e.target.value)}><option value="">Estilista...</option>{employees.map((e: Employee) => <option key={e.id} value={e.id} className="bg-black">{e.name}</option>)}</select>
+        <div className="space-y-6">
+            <div>
+                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Tus Datos</label>
+                <div className="space-y-3">
+                    <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
+                    <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
+                </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                <input type="date" className="input-modern" value={bDate} onChange={e => setBDate(e.target.value)} />
-                <input type="time" className="input-modern" value={bTime} onChange={e => setBTime(e.target.value)} />
+
+            <div>
+                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Qué te harás hoy?</label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="relative">
+                        <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
+                    </div>
+                    <div className="relative">
+                        <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}><option value="">Especialista...</option>{employees.map((e: Employee) => <option key={e.id} value={e.id} className="bg-neutral-900">{e.name}</option>)}</select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
+                    </div>
+                </div>
             </div>
-            <button onClick={handleSubmit} className="btn-primary w-full py-4 mt-2 flex justify-center gap-2 items-center">{isClient ? 'Solicitar Cita' : 'Agendar Reserva'} <CheckCircle2 className="w-5 h-5" /></button>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Fecha</label>
+                    <input type="date" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bDate} onChange={e => setBDate(e.target.value)} />
+                </div>
+                <div>
+                    <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Hora</label>
+                    <input type="time" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bTime} onChange={e => setBTime(e.target.value)} />
+                </div>
+            </div>
+
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleSubmit} className="btn-primary w-full py-4 mt-4 flex justify-center gap-3 items-center text-sm uppercase tracking-widest shadow-xl shadow-yellow-600/20 hover:shadow-yellow-600/40">
+                {isClient ? 'Confirmar Cita' : 'Agendar Reserva'} <CheckCircle2 className="w-5 h-5" />
+            </motion.button>
         </div>
     )
 }

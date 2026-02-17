@@ -5,27 +5,28 @@ import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Cloud
+    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Playfair_Display } from 'next/font/google';
+import { Playfair_Display, Inter } from 'next/font/google';
 
 // 🔥 FIREBASE IMPORTS
 import { db } from '@/lib/firebase';
 import {
     collection, addDoc, deleteDoc, updateDoc, doc,
-    onSnapshot, query, orderBy, Timestamp
+    onSnapshot, query, orderBy, getDocs, getDoc, setDoc
 } from 'firebase/firestore';
 
 const playfair = Playfair_Display({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'] });
 
 // --- Tipos Adaptados para Firebase ---
 type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; };
 type SimpleExpense = { id: string; category: string; amount: number; description: string; date: Date; };
 type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; };
 type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; };
-type ServiceItem = { id: string; name: string; }; // Ahora los servicios son objetos en la DB
+type ServiceItem = { id: string; name: string; };
 
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
 
@@ -36,14 +37,20 @@ export default function StudioSystem() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [expenses, setExpenses] = useState<SimpleExpense[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [adminPin, setAdminPin] = useState("1234"); // Default PIN
 
-    // UI
+    // UI State
     const [loaded, setLoaded] = useState(false);
-    const [view, setView] = useState<'HOME' | 'FINANCE' | 'REPORTS' | 'BOOKINGS' | 'CLIENT_MODE'>('HOME');
+    const [view, setView] = useState<'LANDING' | 'PIN_ENTRY' | 'ADMIN_DASHBOARD' | 'CLIENT_BOOKING'>('LANDING');
+    const [activeTab, setActiveTab] = useState<'HOME' | 'FINANCE' | 'REPORTS' | 'BOOKINGS'>('HOME'); // Sub-tabs for Admin
+    const [pinInput, setPinInput] = useState("");
+    const [pinError, setPinError] = useState(false);
+
+    // Admin Actions State
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
 
-    // Inputs
+    // Inputs CRUD
     const [newEmpName, setNewEmpName] = useState('');
     const [newEmpRole, setNewEmpRole] = useState('');
     const [newEmpComm, setNewEmpComm] = useState('40');
@@ -55,180 +62,198 @@ export default function StudioSystem() {
 
     // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE
     useEffect(() => {
-        // Escuchar Empleados
-        const unsubEmp = onSnapshot(collection(db, "employees"), (snap) => {
-            setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
-        });
-        // Escuchar Servicios
-        const unsubServ = onSnapshot(collection(db, "services"), (snap) => {
-            setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as ServiceItem)));
-        });
-        // Escuchar Transacciones
-        const unsubTrans = onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), (snap) => {
-            setTransactions(snap.docs.map(d => {
-                const data = d.data();
-                return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Transaction;
-            }));
-        });
-        // Escuchar Gastos
-        const unsubExp = onSnapshot(query(collection(db, "expenses"), orderBy("date", "desc")), (snap) => {
-            setExpenses(snap.docs.map(d => {
-                const data = d.data();
-                return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as SimpleExpense;
-            }));
-        });
-        // Escuchar Reservas
+        // Cargar Configuración (PIN)
+        const loadSettings = async () => {
+            const docRef = doc(db, "settings", "config");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setAdminPin(docSnap.data().pin || "1234");
+            } else {
+                // Crear config por defecto si no existe
+                await setDoc(doc(db, "settings", "config"), { pin: "1234" });
+            }
+        };
+        loadSettings();
+
+        // Escuchar Colecciones
+        const unsubEmp = onSnapshot(collection(db, "employees"), (snap) => setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee))));
+        const unsubServ = onSnapshot(collection(db, "services"), (snap) => setServices(snap.docs.map(d => ({ id: d.id, ...d.data() } as ServiceItem))));
+        const unsubTrans = onSnapshot(query(collection(db, "transactions"), orderBy("date", "desc")), (snap) => setTransactions(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Transaction; })));
+        const unsubExp = onSnapshot(query(collection(db, "expenses"), orderBy("date", "desc")), (snap) => setExpenses(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as SimpleExpense; })));
         const unsubBook = onSnapshot(query(collection(db, "bookings")), (snap) => {
-            setBookings(snap.docs.map(d => {
-                const data = d.data();
-                return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Booking;
-            }));
+            setBookings(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Booking; }));
             setLoaded(true);
         });
 
         return () => { unsubEmp(); unsubServ(); unsubTrans(); unsubExp(); unsubBook(); };
     }, []);
 
-    if (!loaded) return <div className="h-screen flex flex-col items-center justify-center bg-[#0f2a24] text-emerald-200"><Cloud className="w-12 h-12 animate-bounce mb-4" /><p>Conectando con la Nube...</p></div>;
+    // --- LOGIC ---
 
-    // 🔥 2. SEED: SI LA DB ESTÁ VACÍA
+    const handlePinSubmit = () => {
+        if (pinInput === adminPin) {
+            setView('ADMIN_DASHBOARD');
+            setPinInput("");
+            setPinError(false);
+        } else {
+            setPinError(true);
+            setPinInput("");
+            setTimeout(() => setPinError(false), 1000);
+        }
+    };
+
     const handleSeedDB = async () => {
-        if (confirm("¿La base de datos está vacía. Quieres cargar los datos de ejemplo?")) {
+        if (confirm("¿Inicializar Base de Datos con ejemplos?")) {
             await addDoc(collection(db, "employees"), { name: 'Diana', role: 'Estilista Senior', avatarSeed: 'Diana', commission: 40 });
             await addDoc(collection(db, "employees"), { name: 'Yolita', role: 'Maquilladora', avatarSeed: 'Yolita', commission: 40 });
-            ["Cortes", "Maquillaje", "Manicure", "Pedicure", "Laceados", "Tintes"].forEach(async s => {
-                await addDoc(collection(db, "services"), { name: s });
-            });
+            ["Cortes", "Maquillaje", "Manicure", "Pedicure", "Laceados", "Tintes"].forEach(async s => await addDoc(collection(db, "services"), { name: s }));
         }
     };
 
-    // 🔥 3. HANDLERS CONECTADOS A FIREBASE
-    const handleRegisterExpense = async (newExp: any) => {
-        await addDoc(collection(db, "expenses"), { ...newExp, date: new Date() });
-    };
-    const handleDeleteExpense = async (id: string) => {
-        if (confirm('¿Eliminar gasto?')) await deleteDoc(doc(db, "expenses", id));
-    };
-    const handleEmployeeDelete = async (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (confirm('⚠️ ¿Estás segura de eliminar a este miembro del equipo?')) await deleteDoc(doc(db, "employees", id));
-    };
-
+    // ... (Resto de Handlers CRUD igual que antes, simplificados para brevedad) ...
+    const handleRegisterExpense = async (newExp: any) => await addDoc(collection(db, "expenses"), { ...newExp, date: new Date() });
+    const handleDeleteExpense = async (id: string) => { if (confirm('¿Eliminar gasto?')) await deleteDoc(doc(db, "expenses", id)); };
+    const handleEmployeeDelete = async (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (confirm('⚠️ ¿Eliminar miembro?')) await deleteDoc(doc(db, "employees", id)); };
     const handleBooking = async (book: any) => {
-        await addDoc(collection(db, "bookings"), { ...book, status: 'confirmed' }); // Date va directo
-        if (view === 'CLIENT_MODE') alert("✨ ¡Reserva Enviada! Te esperamos.");
+        await addDoc(collection(db, "bookings"), { ...book, status: 'confirmed' });
+        alert("✨ ¡Reserva Enviada! Te esperamos pronto.");
+        if (view === 'CLIENT_BOOKING') setView('LANDING'); // Volver al inicio despues de reservar
     };
+    const handleCreateEmployee = async () => { if (!newEmpName) return; await addDoc(collection(db, "employees"), { name: newEmpName, role: newEmpRole || 'Profesional', photo: newEmpPhoto || null, avatarSeed: newEmpName, commission: Number(newEmpComm) || 40 }); setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null); setShowAddModal(false); };
+    const handleCreateService = async () => { if (newServName) { await addDoc(collection(db, "services"), { name: newServName }); setNewServName(''); } };
+    const handleDeleteService = async (id: string) => await deleteDoc(doc(db, "services", id));
+    const handleTransaction = async () => { const p = parseFloat(manPrice); if (!selectedEmp || isNaN(p) || p <= 0) return; await addDoc(collection(db, "transactions"), { employeeId: selectedEmp.id, serviceName: selService, price: p, date: new Date() }); setSelService(null); setManPrice(''); alert('Cobro registrado ☁️'); };
+    const handleUpdateCommission = async (id: string, val: string) => await updateDoc(doc(db, "employees", id), { commission: val });
+    const handleDeleteBooking = async (id: string) => { if (confirm("¿Cancelar cita?")) await deleteDoc(doc(db, "bookings", id)); };
+    const handleResetFinances = async () => alert("Contacta soporte para reset masivo seguro.");
 
-    const handleCreateEmployee = async () => {
-        if (!newEmpName) return;
-        await addDoc(collection(db, "employees"), { name: newEmpName, role: newEmpRole || 'Profesional', photo: newEmpPhoto || null, avatarSeed: newEmpName, commission: Number(newEmpComm) || 40 });
-        setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null); setShowAddModal(false);
-    };
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewEmpPhoto(reader.result as string); reader.readAsDataURL(file); } };
 
-    const handleCreateService = async () => {
-        if (newServName) {
-            await addDoc(collection(db, "services"), { name: newServName });
-            setNewServName('');
-        }
-    };
 
-    const handleDeleteService = async (id: string) => {
-        await deleteDoc(doc(db, "services", id));
-    };
+    if (!loaded) return <div className="h-screen flex flex-col items-center justify-center bg-[#0f2a24] text-emerald-200"><Cloud className="w-12 h-12 animate-pulse mb-4" /><p className={playfair.className}>Conectando Mivis Studio...</p></div>;
 
-    const handleTransaction = async () => {
-        const p = parseFloat(manPrice);
-        if (!selectedEmp || isNaN(p) || p <= 0) return;
-        await addDoc(collection(db, "transactions"), {
-            employeeId: selectedEmp.id,
-            serviceName: selService,
-            price: p,
-            date: new Date()
-        });
-        setSelService(null); setManPrice(''); alert('Cobro registrado en la Nube ☁️');
-    };
+    // --- VISTAS ---
 
-    const handleUpdateCommission = async (id: string, val: string) => {
-        await updateDoc(doc(db, "employees", id), { commission: val });
-    };
+    // 1. LANDING PAGE
+    if (view === 'LANDING') {
+        return (
+            <div className="min-h-screen bg-[#061814] text-emerald-50 flex items-center justify-center p-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop')] bg-cover bg-center opacity-20"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-[#061814] via-[#061814]/80 to-transparent"></div>
 
-    const handleDeleteBooking = async (id: string) => {
-        if (confirm("¿Cancelar cita?")) await deleteDoc(doc(db, "bookings", id));
-    };
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 max-w-md w-full text-center space-y-8">
+                    <div className="mb-8">
+                        <h1 className={`${playfair.className} text-5xl md:text-6xl text-yellow-500 mb-2 drop-shadow-lg`}>MIVIS</h1>
+                        <p className="text-emerald-200/80 tracking-[0.4em] text-sm uppercase">Studio & Beauty</p>
+                    </div>
 
-    const handleResetFinances = async () => {
-        if (confirm("⚠️ ¿RESET TOTAL REAL? Esto borrará TODO de la base de datos permanentemente.")) {
-            // En Firebase borrar colecciones enteras desde el cliente es complejo/caro, 
-            // lo simularemos borrando una a una (solo para admin).
-            const batchDelete = async (col: string) => {
-                // Nota: En prod esto debería ser una Cloud Function, pero aquí funciona para pocos datos
-                alert("Contacta al admin para borrado masivo seguro.");
-            };
-            alert("Por seguridad, el borrado masivo de base de datos está desactivado desde la web. Elimina uno a uno o limpia desde la consola de Firebase.");
-        }
-    };
+                    <div className="space-y-4">
+                        <button onClick={() => setView('CLIENT_BOOKING')} className="w-full bg-white text-[#061814] hover:bg-emerald-100 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(255,255,255,0.1)] transition-all flex items-center justify-center gap-3">
+                            <Calendar className="w-5 h-5" /> Reservar Cita
+                        </button>
+                        <button onClick={() => setView('PIN_ENTRY')} className="w-full bg-transparent border border-white/10 text-white/40 hover:text-white hover:border-white/30 py-4 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2">
+                            <Lock className="w-4 h-4" /> Soy Administrador
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
+        )
+    }
 
-    // --- RENDERS ---
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) { const reader = new FileReader(); reader.onloadend = () => setNewEmpPhoto(reader.result as string); reader.readAsDataURL(file); }
-    };
+    // 2. PIN ENTRY (ADMIN LOGIN)
+    if (view === 'PIN_ENTRY') {
+        return (
+            <div className="min-h-screen bg-[#0f2a24] flex items-center justify-center p-4">
+                <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
+                    <Lock className="w-8 h-8 text-yellow-500 mx-auto mb-6" />
+                    <h2 className={`${playfair.className} text-2xl text-white mb-6`}>Acceso Privado</h2>
+                    <div className="flex justify-center gap-2 mb-8">
+                        {[0, 1, 2, 3].map(i => (
+                            <div key={i} className={`w-3 h-3 rounded-full transition-all ${pinInput.length > i ? 'bg-yellow-500' : 'bg-white/10'}`}></div>
+                        ))}
+                    </div>
+                    {pinError && <p className="text-red-400 text-xs mb-4 animate-shake">Contraseña Incorrecta</p>}
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                            <button key={n} onClick={() => setPinInput(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">{n}</button>
+                        ))}
+                        <div className="col-start-2"><button onClick={() => setPinInput(prev => (prev.length < 4 ? prev + 0 : prev))} className="w-full h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">0</button></div>
+                        <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors"><X className="w-6 h-6" /></button></div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setView('LANDING')} className="flex-1 py-3 rounded-xl border border-white/10 text-xs text-white/50 hover:bg-white/5">Cancelar</button>
+                        <button onClick={handlePinSubmit} className="flex-1 py-3 rounded-xl bg-yellow-600 text-black font-bold text-sm hover:bg-yellow-500">Entrar</button>
+                    </div>
+                    <p className="text-[10px] text-white/20 mt-4">Clave por defecto: 1234</p>
+                </motion.div>
+            </div>
+        )
+    }
 
-    // Render Vista Cliente
-    if (view === 'CLIENT_MODE') {
+    // 3. CLIENT BOOKING VIEW
+    if (view === 'CLIENT_BOOKING') {
         return (
             <div className="min-h-screen bg-[#0f2a24] text-[#e0e7e4] font-sans flex flex-col">
+                <div className="p-4"><button onClick={() => setView('LANDING')} className="text-white/50 hover:text-white flex items-center gap-2 text-sm"><ChevronRight className="rotate-180 w-4 h-4" /> Volver</button></div>
                 <div className="flex-1 flex flex-col items-center justify-center p-6">
-                    <h1 className={`${playfair.className} text-4xl text-yellow-500 mb-2`}>MIVIS STUDIO</h1>
-                    <p className="text-emerald-300 text-xs tracking-[0.3em] uppercase mb-8">Reserva tu momento</p>
+                    <h1 className={`${playfair.className} text-3xl text-yellow-500 mb-2`}>Tu Cita</h1>
+                    <p className="text-emerald-300 text-xs tracking-[0.2em] uppercase mb-8">Reserva en Mivis Studio</p>
                     <div className="w-full max-w-md bg-white/5 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
                         <BookingForm services={services} employees={employees} onSubmit={handleBooking} isClient={true} />
-                        <button onClick={() => setView('HOME')} className="mt-6 text-xs text-white/20 hover:text-white uppercase w-full text-center">Soy Administrador</button>
                     </div>
                 </div>
             </div>
         )
     }
 
-    // Render Admin
+    // 4. ADMIN DASHBOARD (The Full System)
     return (
         <div className={`min-h-screen bg-[#0f2a24] text-[#e0e7e4] font-sans pb-20 selection:bg-yellow-500 selection:text-black`}>
+            {/* Admin Header */}
             <header className="sticky top-0 z-20 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center bg-[#0f2a24]/80">
                 <div className="flex items-center gap-2">
-                    <Cloud className="w-4 h-4 text-emerald-500 animate-pulse" />
-                    <div><h1 className={`${playfair.className} text-xl sm:text-3xl text-yellow-500 font-medium tracking-wide drop-shadow-lg`}>MIVIS STUDIO</h1></div>
+                    <Store className="w-5 h-5 text-yellow-500" />
+                    <div>
+                        <h1 className={`${playfair.className} text-xl text-white font-medium`}>MIVIS ADMIN</h1>
+                    </div>
                 </div>
-                <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 sm:pb-0">
-                    <NavBtn icon={<Calendar />} label="Agenda" active={view === 'BOOKINGS'} onClick={() => setView('BOOKINGS')} />
-                    <NavBtn icon={<Wallet />} label="Finanzas" active={view === 'FINANCE'} onClick={() => setView('FINANCE')} />
-                    <NavBtn icon={<TrendingUp />} label="Reportes" active={view === 'REPORTS'} onClick={() => setView('REPORTS')} />
-                    {view !== 'HOME' && <NavBtn icon={<X />} label="" active={false} onClick={() => setView('HOME')} />}
+                <div className="flex gap-2 items-center">
+                    <div className="hidden sm:flex gap-1 bg-black/20 p-1 rounded-full border border-white/5">
+                        <NavBtn icon={<Users />} label="Equipo" active={activeTab === 'HOME'} onClick={() => setActiveTab('HOME')} />
+                        <NavBtn icon={<Calendar />} label="Agenda" active={activeTab === 'BOOKINGS'} onClick={() => setActiveTab('BOOKINGS')} />
+                        <NavBtn icon={<Wallet />} label="Finanzas" active={activeTab === 'FINANCE'} onClick={() => setActiveTab('FINANCE')} />
+                        <NavBtn icon={<TrendingUp />} label="Reportes" active={activeTab === 'REPORTS'} onClick={() => setActiveTab('REPORTS')} />
+                    </div>
+                    <button onClick={() => setView('LANDING')} className="p-2 text-red-400 hover:bg-red-500/10 rounded-full border border-transparent hover:border-red-500/20 transition-all ml-2"><LogOut className="w-4 h-4" /></button>
                 </div>
             </header>
 
+            {/* Mobile Tab Bar */}
+            <div className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/80 backdrop-blur-xl p-2 rounded-full border border-white/10 shadow-2xl z-30">
+                <NavBtn icon={<Users />} label="" active={activeTab === 'HOME'} onClick={() => setActiveTab('HOME')} />
+                <NavBtn icon={<Calendar />} label="" active={activeTab === 'BOOKINGS'} onClick={() => setActiveTab('BOOKINGS')} />
+                <NavBtn icon={<Wallet />} label="" active={activeTab === 'FINANCE'} onClick={() => setActiveTab('FINANCE')} />
+                <NavBtn icon={<TrendingUp />} label="" active={activeTab === 'REPORTS'} onClick={() => setActiveTab('REPORTS')} />
+            </div>
+
             <main className="max-w-6xl mx-auto p-6">
-                {employees.length === 0 && !loaded && <button onClick={handleSeedDB} className="mx-auto block bg-blue-600 px-6 py-3 rounded-full mb-8">🛠️ Base de Datos Vacía: Clic para Inicializar</button>}
+                {employees.length === 0 && !loaded && <button onClick={handleSeedDB} className="mx-auto block bg-blue-600 px-6 py-3 rounded-full mb-8">🛠️ Inicializar DB</button>}
 
                 <AnimatePresence mode='wait'>
-                    {view === 'BOOKINGS' && (
+                    {activeTab === 'BOOKINGS' && (
                         <BookingSection bookings={bookings} employees={employees} services={services} onAdd={handleBooking} onDelete={handleDeleteBooking} />
                     )}
 
-                    {view === 'FINANCE' && (
+                    {activeTab === 'FINANCE' && (
                         <FinanceSection transactions={transactions} expenses={expenses} onAdd={handleRegisterExpense} onDelete={handleDeleteExpense} onReset={handleResetFinances} />
                     )}
 
-                    {view === 'REPORTS' && <ReportSection employees={employees} transactions={transactions} onUpdateComm={handleUpdateCommission} />}
+                    {activeTab === 'REPORTS' && <ReportSection employees={employees} transactions={transactions} onUpdateComm={handleUpdateCommission} />}
 
-                    {view === 'HOME' && (
+                    {activeTab === 'HOME' && (
                         <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            {employees.length === 0 && <div className="text-center py-20"><button onClick={handleSeedDB} className="btn-primary px-8 py-4">🏗️ Inicializar Base de Datos</button></div>}
-
-                            <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-4"><h2 className={`${playfair.className} text-2xl text-emerald-100 italic`}>Equipo</h2>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setView('CLIENT_MODE')} className="hidden sm:flex items-center gap-2 border border-white/20 hover:bg-white/5 px-4 py-2 rounded-full text-xs uppercase font-bold tracking-wider transition-all">Vista Cliente</button>
-                                    <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-yellow-900/20"><Plus className="w-4 h-4" /> Nuevo</button>
-                                </div>
+                            <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-4"><h2 className={`${playfair.className} text-2xl text-emerald-100 italic`}>Tu Equipo</h2>
+                                <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-yellow-900/20"><Plus className="w-4 h-4" /> Nuevo</button>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                                 {employees.map(emp => {
@@ -247,7 +272,7 @@ export default function StudioSystem() {
                     )}
                 </AnimatePresence>
 
-                {/* MODALES */}
+                {/* MODALES & UTILS */}
                 <AnimatePresence>
                     {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
                     {selectedEmp && (
@@ -266,13 +291,14 @@ export default function StudioSystem() {
     );
 }
 
-// --- SUB-COMPONENTES IGUALES PERO CON TIPOS ---
+// --- SUB-COMPONENTES AUXILIARES ---
+// (BookingSection, BookingForm, FinanceSection, etc. se mantienen igual pero integrados en el dashboard)
 function BookingSection({ bookings, employees, services, onAdd, onDelete }: any) {
     const sortedBookings = [...bookings].sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
     return (
         <div className="grid md:grid-cols-2 gap-8 animate-in fade-in">
             <div className="space-y-6">
-                <h2 className={`${playfair.className} text-2xl text-emerald-200`}>Nueva Reserva</h2>
+                <h2 className={`${playfair.className} text-2xl text-emerald-200`}>Agendar Cita (Manual)</h2>
                 <div className="bg-white/5 border border-white/10 p-6 rounded-3xl">
                     <BookingForm employees={employees} services={services} onSubmit={onAdd} isClient={false} />
                 </div>
@@ -378,5 +404,5 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
 }
 
 function StatCard({ label, val, icon, color, bg }: any) { return (<div className={`p-6 rounded-2xl border border-white/5 ${bg}`}><div className={`flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider ${color}`}>{icon} {label}</div><div className={`text-3xl font-mono font-bold ${color}`}>S/. {val.toFixed(2)}</div></div>); }
-function NavBtn({ icon, label, active, onClick }: any) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}<span className="hidden sm:inline">{label}</span></button>) }
+function NavBtn({ icon, label, active, onClick }: any) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
 function Modal({ children, onClose }: any) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }

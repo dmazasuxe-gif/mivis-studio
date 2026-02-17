@@ -202,9 +202,9 @@ export default function StudioSystem() {
                     {pinError && <p className="text-red-400 text-xs mb-4 animate-shake">Contraseña Incorrecta</p>}
                     <div className="grid grid-cols-3 gap-3 mb-6">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-                            <button key={n} onClick={() => setPinInput(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">{n}</button>
+                            <button key={n} onClick={() => setPinInput(prev => (prev.length < 6 ? prev + n : prev))} className="h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">{n}</button>
                         ))}
-                        <div className="col-start-2"><button onClick={() => setPinInput(prev => (prev.length < 4 ? prev + 0 : prev))} className="w-full h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">0</button></div>
+                        <div className="col-start-2"><button onClick={() => setPinInput(prev => (prev.length < 6 ? prev + 0 : prev))} className="w-full h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">0</button></div>
                         <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors"><X className="w-6 h-6" /></button></div>
                     </div>
                     <div className="flex gap-2">

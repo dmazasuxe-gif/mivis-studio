@@ -92,6 +92,17 @@ export default function StudioSystem() {
     const [splitParts, setSplitParts] = useState<{ method: string, amount: number }[]>([]);
     const [splitAmount, setSplitAmount] = useState('');
 
+    // 🛒 GESTIÓN DE PUNTO DE VENTA (GLOBAL POS)
+    const [showPos, setShowPos] = useState(false);
+    const [posCart, setPosCart] = useState<{ id: string, service: string, emplId: string, emplName: string, price: number }[]>([]);
+    const [posMethod, setPosMethod] = useState(PAY_METHODS[0]);
+    // Inputs para agregar items al carrito
+    const [addItemServ, setAddItemServ] = useState('');
+    const [addItemEmp, setAddItemEmp] = useState('');
+    const [addItemPrice, setAddItemPrice] = useState('');
+
+    // Voice Alert State
+
     // Voice Alert State
     const [alertedBookings, setAlertedBookings] = useState<Set<string>>(new Set());
 
@@ -238,62 +249,52 @@ export default function StudioSystem() {
     };
 
 
-    const handleTransaction = async () => {
-        const totalP = parseFloat(manPrice);
-        if (!selectedEmp || isNaN(totalP) || totalP <= 0) return;
+    // --- NUEVO SISTEMA DE COBRO (GLOBAL POS) ---
+    const addToCart = (service: string, emplId: string, emplName: string, priceStr: string = '0') => {
+        const price = parseFloat(priceStr) || 0;
+        setPosCart(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), service, emplId, emplName, price }]);
+    };
 
-        if (isSplit) {
-            const currentTotal = splitParts.reduce((s, p) => s + p.amount, 0);
-            if (Math.abs(currentTotal - totalP) > 0.1) return alert(`Los montos no coinciden. Faltan S/. ${(totalP - currentTotal).toFixed(2)}`);
+    const handlePOSCheckout = async () => {
+        if (posCart.length === 0) return;
 
-            for (const part of splitParts) {
-                await addDoc(collection(db, "transactions"), {
-                    employeeId: selectedEmp.id,
-                    serviceName: `${selService} (Part. ${part.method})`,
-                    price: part.amount,
-                    date: new Date(),
-                    paymentMethod: part.method
-                });
-            }
-        } else {
+        const total = posCart.reduce((s, i) => s + i.price, 0);
+
+        // 1. Guardar Transacciones
+        for (const item of posCart) {
             await addDoc(collection(db, "transactions"), {
-                employeeId: selectedEmp.id,
-                serviceName: selService,
-                price: totalP,
+                employeeId: item.emplId,
+                serviceName: item.service,
+                price: item.price,
                 date: new Date(),
-                paymentMethod: transPayment
+                paymentMethod: posMethod
             });
         }
 
+        // 2. Alerta de Voz (Resumen)
+        // Agrupar por trabajador para la alerta
+        const workersInvolved = Array.from(new Set(posCart.map(i => i.emplName)));
+        const msg = `Venta registrada con éxito. Atención, ${workersInvolved.join(' y ')} han terminado servicio y están disponibles.`;
 
-
-        // 🔊 ALERT: Worker Available
-        const msg = `Atención, ${selectedEmp.name} ha terminado un servicio y está disponible.`;
         const utterance = new SpeechSynthesisUtterance(msg);
         utterance.lang = 'es-ES';
         utterance.volume = 1.0;
         utterance.pitch = 1.1;
         window.speechSynthesis.speak(utterance);
 
-        setSelService(null);
-        setManPrice('');
-        setTransPayment(PAY_METHODS[0]);
-        setIsSplit(false);
-        setSplitParts([]);
-        alert('Cobro registrado ☁️');
+        // 3. Reset
+        setPosCart([]);
+        setAddItemServ(''); setAddItemEmp(''); setAddItemPrice('');
+        setShowPos(false);
+        alert(`✅ Cobro de S/. ${total} registrado exitosamente.`);
     };
 
-    const addSplitPart = (method: string) => {
-        const val = parseFloat(splitAmount);
-        if (!val || val <= 0) return;
-        setSplitParts([...splitParts, { method, amount: val }]);
-        setSplitAmount('');
+    const updateCartItemPrice = (id: string, newPrice: string) => {
+        setPosCart(prev => prev.map(item => item.id === id ? { ...item, price: parseFloat(newPrice) || 0 } : item));
     };
 
-    const removeSplitPart = (index: number) => {
-        const n = [...splitParts];
-        n.splice(index, 1);
-        setSplitParts(n);
+    const removeCartItem = (id: string) => {
+        setPosCart(prev => prev.filter(item => item.id !== id));
     };
     const handleUpdateCommission = async (id: string, val: string) => await updateDoc(doc(db, "employees", id), { commission: val });
     const handleDeleteBooking = async (id: string) => { if (confirm("¿Cancelar cita?")) await deleteDoc(doc(db, "bookings", id)); };
@@ -613,6 +614,7 @@ export default function StudioSystem() {
                         <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-4"><h2 className={`${playfair.className} text-2xl text-emerald-100 italic`}>Tu Equipo</h2>
                                 <div className="flex gap-2">
+                                    <button onClick={() => { setShowPos(true); setPosCart([]); }} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-emerald-900/20 animate-pulse"><DollarSign className="w-4 h-4" /> Nueva Venta</button>
                                     <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-emerald-100 px-5 py-2 rounded-full font-bold text-sm transition-all border border-white/10"><Settings className="w-4 h-4" /> Servicios</button>
                                     <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-yellow-900/20"><Plus className="w-4 h-4" /> Nuevo</button>
                                 </div>
@@ -677,7 +679,11 @@ export default function StudioSystem() {
                                                     {services.map(s => (
                                                         <button
                                                             key={s.id}
-                                                            onClick={() => { setSelectedEmp(emp); setSelService(s.name); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }}
+                                                            onClick={() => {
+                                                                // Open Global POS with this item pre-filled
+                                                                setPosCart([{ id: Math.random().toString(36), service: s.name, emplId: emp.id, emplName: emp.name, price: 0 }]);
+                                                                setShowPos(true);
+                                                            }}
                                                             className="bg-white/20 hover:bg-white/40 text-left p-2 rounded-lg text-xs font-bold transition-colors leading-tight truncate border border-transparent hover:border-black/5"
                                                         >
                                                             {s.name}
@@ -685,7 +691,10 @@ export default function StudioSystem() {
                                                     ))}
                                                     <button onClick={() => {
                                                         const custom = prompt("Servicio Eventual:");
-                                                        if (custom) { setSelectedEmp(emp); setSelService(custom); setIsManaging(false); }
+                                                        if (custom) {
+                                                            setPosCart([{ id: Math.random().toString(36), service: custom, emplId: emp.id, emplName: emp.name, price: 0 }]);
+                                                            setShowPos(true);
+                                                        }
                                                     }}
                                                         className="bg-black/5 hover:bg-black/10 border border-black/5 border-dashed p-2 rounded-lg text-xs font-bold text-center flex items-center justify-center text-black/40 hover:text-black/60"
                                                     >
@@ -696,7 +705,7 @@ export default function StudioSystem() {
 
                                             <div className="flex justify-between items-center border-t border-black/10 pt-3">
                                                 <p className="text-[10px] opacity-50 font-bold uppercase">Hoy: <span className="font-mono text-sm ml-1">S/. {totalToday}</span></p>
-                                                <button onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); }} className="text-[10px] underline opacity-50 hover:opacity-100">Ver Detalles</button>
+                                                <button onClick={() => { setSelectedEmp(emp); }} className="text-[10px] underline opacity-50 hover:opacity-100">Ver Detalles</button>
                                             </div>
                                         </motion.div>
                                     );
@@ -705,6 +714,98 @@ export default function StudioSystem() {
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                {/* 🛒 MODAL POS (GLOBAL) */}
+                {showPos && (
+                    <Modal onClose={() => setShowPos(false)}>
+                        <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>💰 Punto de Venta</h3>
+
+                        {/* Builder */}
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-6">
+                            <p className="text-xs font-bold uppercase text-white/50 mb-2">Agregar Servicio</p>
+                            <div className="grid grid-cols-12 gap-2">
+                                <div className="col-span-4 max-w-full">
+                                    <select className="input-modern py-2 text-sm max-w-full" value={addItemServ} onChange={e => setAddItemServ(e.target.value)}>
+                                        <option value="">Servicio...</option>
+                                        {services.map(s => <option key={s.id} value={s.name} className="bg-black">{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-span-4">
+                                    <select className="input-modern py-2 text-sm" value={addItemEmp} onChange={e => setAddItemEmp(e.target.value)}>
+                                        <option value="">Profesional...</option>
+                                        {employees.map(e => <option key={e.id} value={e.id} className="bg-black">{e.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-span-3">
+                                    <input type="number" placeholder="Precio" className="input-modern py-2 text-sm" value={addItemPrice} onChange={e => setAddItemPrice(e.target.value)} />
+                                </div>
+                                <div className="col-span-1">
+                                    <button
+                                        onClick={() => {
+                                            if (addItemServ && addItemEmp && addItemPrice) {
+                                                const emp = employees.find(e => e.id === addItemEmp);
+                                                addToCart(addItemServ, addItemEmp, emp?.name || '?', addItemPrice);
+                                                setAddItemServ(''); setAddItemEmp(''); setAddItemPrice('');
+                                            }
+                                        }}
+                                        className="w-full h-full bg-yellow-500 rounded-lg text-black flex items-center justify-center hover:bg-yellow-400"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Cart List */}
+                        <div className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto custom-scrollbar">
+                            {posCart.length === 0 ? (
+                                <p className="text-center text-white/30 italic py-4">El carrito está vacío.</p>
+                            ) : (
+                                posCart.map((item, i) => (
+                                    <div key={item.id} className="flex items-center justify-between bg-black/20 p-3 rounded-lg border border-white/5">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-white">{item.service}</span>
+                                                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 rounded-full border border-emerald-500/20">{item.emplName}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm text-yellow-500 font-serif">S/.</span>
+                                            <input
+                                                type="number"
+                                                className="w-16 bg-transparent border-b border-white/20 text-right font-mono focus:border-yellow-500 outline-none"
+                                                value={item.price}
+                                                onChange={(e) => updateCartItemPrice(item.id, e.target.value)}
+                                            />
+                                            <button onClick={() => removeCartItem(item.id)} className="text-red-400 hover:text-red-300 ml-2"><Trash2 className="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Total & Pay */}
+                        <div className="border-t border-white/10 pt-4">
+                            <div className="flex justify-between items-end mb-6">
+                                <span className="text-sm font-bold uppercase text-white/50">Total a Pagar</span>
+                                <span className="text-4xl font-playfair font-bold text-yellow-500">S/. {posCart.reduce((s, i) => s + i.price, 0).toFixed(2)}</span>
+                            </div>
+
+                            <label className="text-xs text-white/40 uppercase font-bold block mb-2">Método de Pago</label>
+                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                                {ADMIN_PAY_METHODS.map(pm => (
+                                    <button key={pm} onClick={() => setPosMethod(pm)} className={`flex-1 px-3 py-3 rounded-xl text-xs font-bold border transition-all ${posMethod === pm ? 'bg-yellow-500 text-black border-yellow-500 shadow-lg' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
+                                        {pm}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button onClick={handlePOSCheckout} disabled={posCart.length === 0} className="btn-primary w-full py-4 text-lg flex justify-center gap-2 disabled:opacity-50 disabled:grayscale">
+                                <DollarSign className="w-6 h-6" /> Procesar Venta
+                            </button>
+                        </div>
+                    </Modal>
+                )}
 
                 {/* MODALES & UTILS */}
                 <AnimatePresence>
@@ -873,111 +974,48 @@ export default function StudioSystem() {
                     {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /><input type="text" placeholder="Contraseña (4 dígitos)" className="input-modern" maxLength={4} value={newEmpPass} onChange={e => setNewEmpPass(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
                     {selectedEmp && (
                         <Modal onClose={() => setSelectedEmp(null)}>
-                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10"><div className="flex items-center gap-3"><img src={selectedEmp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedEmp.avatarSeed}`} className="w-12 h-12 object-cover rounded-full bg-[#1a3830]" /><div><h3 className={`${playfair.className} text-xl text-white`}>{selectedEmp.name}</h3></div></div><button onClick={() => setIsManaging(!isManaging)} className="p-2 text-emerald-400 hover:bg-white/5 rounded-full"><Settings className="w-5 h-5" /></button></div>
-
-                            {!selService || isManaging ? (
-                                <div className="space-y-4">
-
-
-
-                                    <div className="space-y-4">
-                                        {/* Today's History List - Cleaned up view */}
-                                        <div className="pt-2">
-                                            <div className="flex justify-between items-center mb-4 bg-white/5 p-3 rounded-xl border border-white/5">
-                                                <p className="text-xs text-emerald-100 uppercase font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Total Generado Hoy</p>
-                                                <span className="text-xl font-mono text-yellow-500 font-bold">S/. {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0)}</span>
-                                            </div>
-
-                                            <p className="text-[10px] text-white/40 uppercase font-bold mb-2 pl-1">Detalle de Servicios</p>
-                                            <div className="bg-black/20 rounded-xl border border-white/5 p-2 max-h-[50vh] overflow-y-auto custom-scrollbar space-y-1">
-                                                {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).length === 0 ? (
-                                                    <div className="flex flex-col items-center justify-center py-10 opacity-30">
-                                                        <DollarSign className="w-12 h-12 mb-2" />
-                                                        <p className="text-sm italic">Sin cobros registrados hoy.</p>
-                                                    </div>
-                                                ) : (
-                                                    transactions
-                                                        .filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0)))
-                                                        .sort((a, b) => b.date.getTime() - a.date.getTime())
-                                                        .map(t => (
-                                                            <div key={t.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg text-sm hover:bg-white/10 transition-colors">
-                                                                <div>
-                                                                    <p className="font-bold text-white">{t.serviceName}</p>
-                                                                    <p className="text-[10px] text-white/40 flex items-center gap-1"><Clock className="w-3 h-3" /> {t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                                                </div>
-                                                                <p className="font-mono text-emerald-300 font-bold">S/. {t.price}</p>
-                                                            </div>
-                                                        ))
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+                                <div className="flex items-center gap-3">
+                                    <img src={selectedEmp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedEmp.avatarSeed}`} className="w-12 h-12 object-cover rounded-full bg-[#1a3830]" />
+                                    <div><h3 className={`${playfair.className} text-xl text-white`}>{selectedEmp.name}</h3></div>
                                 </div>
-                            ) : (
-                                <div className="flex flex-col items-center animate-in fade-in zoom-in-95">
-                                    <button onClick={() => setSelService(null)} className="self-start text-xs text-emerald-400 mb-8 hover:underline">← Volver</button>
-                                    <h4 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>{selService}</h4>
-                                    <div className="relative w-full max-w-[180px] mb-8">
-                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-2xl text-white/30 font-serif">S/.</span>
-                                        <input autoFocus type="number" placeholder="0" className="w-full bg-transparent text-center text-5xl font-playfair text-white border-b-2 border-white/20 focus:border-yellow-500 outline-none pb-2" value={manPrice} onChange={e => setManPrice(e.target.value)} />
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="pt-2">
+                                    <div className="flex justify-between items-center mb-4 bg-white/5 p-3 rounded-xl border border-white/5">
+                                        <p className="text-xs text-emerald-100 uppercase font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Total Generado Hoy</p>
+                                        <span className="text-xl font-mono text-yellow-500 font-bold">S/. {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0)}</span>
                                     </div>
-                                    <div className="w-full mb-6 relative">
-                                        <div className="flex justify-center mb-4">
-                                            <button onClick={() => { setIsSplit(!isSplit); setSplitParts([]); }} className={`text-xs px-3 py-1 rounded-full border transition-all ${isSplit ? 'bg-yellow-500 text-black border-yellow-500 font-bold' : 'text-white/40 border-white/20 hover:border-white'}`}>
-                                                🔀 Dividir Pago {isSplit && '(Activado)'}
-                                            </button>
-                                        </div>
 
-                                        {isSplit ? (
-                                            <div className="bg-black/20 p-4 rounded-xl border border-white/10 animate-in fade-in slide-in-from-top-2">
-                                                <div className="flex justify-between text-xs text-white/50 mb-2 font-bold uppercase">
-                                                    <span>Monto Total: S/. {manPrice || 0}</span>
-                                                    <span className={`${(parseFloat(manPrice || '0') - splitParts.reduce((s, p) => s + p.amount, 0)) === 0 ? 'text-emerald-400' : 'text-red-400'}`}>Restante: S/. {(parseFloat(manPrice || '0') - splitParts.reduce((s, p) => s + p.amount, 0)).toFixed(2)}</span>
-                                                </div>
-
-                                                <div className="space-y-2 mb-4">
-                                                    {splitParts.map((p, i) => (
-                                                        <div key={i} className="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg text-sm">
-                                                            <span>{p.method}</span>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-mono">S/. {p.amount}</span>
-                                                                <button onClick={() => removeSplitPart(i)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="flex gap-2 mb-2">
-                                                    <input type="number" placeholder="Monto Parcial" className="input-modern w-24 text-center py-1 text-sm font-mono" value={splitAmount} onChange={e => setSplitAmount(e.target.value)} />
-                                                    <div className="flex-1 flex gap-1 overflow-x-auto custom-scrollbar pb-1">
-                                                        {ADMIN_PAY_METHODS.map(pm => (
-                                                            <button key={pm} onClick={() => addSplitPart(pm)} className="bg-emerald-900/40 border border-emerald-500/20 text-emerald-100 text-[10px] px-2 rounded hover:bg-emerald-500 hover:text-black whitespace-nowrap transition-colors">{pm}</button>
-                                                        ))}
-                                                    </div>
-                                                </div>
+                                    <p className="text-[10px] text-white/40 uppercase font-bold mb-2 pl-1">Detalle de Servicios</p>
+                                    <div className="bg-black/20 rounded-xl border border-white/5 p-2 max-h-[50vh] overflow-y-auto custom-scrollbar space-y-1">
+                                        {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-10 opacity-30">
+                                                <DollarSign className="w-12 h-12 mb-2" />
+                                                <p className="text-sm italic">Sin cobros registrados hoy.</p>
                                             </div>
                                         ) : (
-                                            <>
-                                                <label className="text-xs text-white/40 uppercase font-bold block mb-2 text-center">Método de Pago</label>
-                                                <div className="flex gap-2 justify-center flex-wrap">
-                                                    {ADMIN_PAY_METHODS.map(pm => (
-                                                        <button key={pm} onClick={() => setTransPayment(pm)} className={`px-3 py-1 rounded-full text-xs font-bold border ${transPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
-                                                            {pm}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </>
+                                            transactions
+                                                .filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0)))
+                                                .sort((a, b) => b.date.getTime() - a.date.getTime())
+                                                .map(t => (
+                                                    <div key={t.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg text-sm hover:bg-white/10 transition-colors">
+                                                        <div>
+                                                            <p className="font-bold text-white">{t.serviceName}</p>
+                                                            <p className="text-[10px] text-white/40 flex items-center gap-1"><Clock className="w-3 h-3" /> {t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                        </div>
+                                                        <p className="font-mono text-emerald-300 font-bold">S/. {t.price}</p>
+                                                    </div>
+                                                ))
                                         )}
                                     </div>
-                                    <button onClick={handleTransaction} disabled={isSplit && Math.abs(parseFloat(manPrice || '0') - splitParts.reduce((s, p) => s + p.amount, 0)) > 0.1} className="btn-primary w-full py-4 flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <DollarSign className="w-5 h-5" /> Cobrar
-                                    </button>
                                 </div>
-                            )}
+                            </div>
                         </Modal>
                     )}
                 </AnimatePresence>
-            </main>
+            </main >
             <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div >
     );
 }

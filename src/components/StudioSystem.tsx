@@ -577,20 +577,34 @@ export default function StudioSystem() {
                                             {/* Current Client Display (Top Priority) */}
                                             {(() => {
                                                 const currentBooking = bookings
-                                                    .filter(b => b.professionalId === emp.id && b.status !== 'completed' && b.date.getDate() === new Date().getDate())
+                                                    .filter(b => b.professionalId === emp.id && (b.status === 'confirmed' || b.status === 'pending') && b.date.getDate() === new Date().getDate())
                                                     .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
 
                                                 if (currentBooking) {
                                                     return (
-                                                        <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-sm">
-                                                            <p className="text-[10px] text-yellow-700 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Atendiendo a</p>
-                                                            <p className="text-lg font-black text-yellow-800 leading-tight truncate">{currentBooking.clientName}</p>
-                                                            <p className="text-xs font-medium text-yellow-800/70">{currentBooking.service}</p>
-                                                            {currentBooking.description && <p className="text-[10px] italic text-yellow-800/60 mt-1">"{currentBooking.description}"</p>}
+                                                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-sm relative overflow-hidden">
+                                                            <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                                                            <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
+                                                                <span className="relative flex h-2 w-2">
+                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                                                </span>
+                                                                OCUPADO
+                                                            </p>
+                                                            <p className="text-lg font-black text-white leading-tight truncate">{currentBooking.clientName}</p>
+                                                            <p className="text-xs font-medium text-white/70">{currentBooking.service}</p>
+                                                            {currentBooking.description && <p className="text-[10px] italic text-white/50 mt-1 border-t border-white/10 pt-1">"{currentBooking.description}"</p>}
                                                         </div>
                                                     );
                                                 }
-                                                return <div className="bg-white/10 rounded-xl p-3 text-center border border-white/5"><p className="text-xs opacity-50 italic">Disponible</p></div>;
+                                                return (
+                                                    <div className="bg-emerald-500/10 rounded-xl p-3 text-center border border-emerald-500/20">
+                                                        <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center justify-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                            Disponible
+                                                        </p>
+                                                    </div>
+                                                );
                                             })()}
 
                                             {/* POS Service Grid */}
@@ -725,7 +739,10 @@ export default function StudioSystem() {
                                 <div className="space-y-4">
 
 
-                                    <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto custom-scrollbar p-1">
+
+                                    {/* Quick POS Grid */}
+                                    <p className="text-[10px] text-white/40 uppercase font-bold">Registrar Nuevo Cobro</p>
+                                    <div className="grid grid-cols-2 gap-3 max-h-[30vh] overflow-y-auto custom-scrollbar p-1">
                                         {services.map(s => (
                                             <button
                                                 key={s.id}
@@ -733,7 +750,7 @@ export default function StudioSystem() {
                                                 className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-yellow-500/50 p-4 rounded-xl text-left transition-all group"
                                             >
                                                 <span className="font-bold text-emerald-100 group-hover:text-yellow-500 transition-colors block mb-1">{s.name}</span>
-                                                <span className="text-[10px] text-white/30 uppercase tracking-widest">Registrar</span>
+                                                <span className="text-[10px] text-white/30 uppercase tracking-widest">Cobrar</span>
                                             </button>
                                         ))}
                                         <button
@@ -744,8 +761,35 @@ export default function StudioSystem() {
                                             className="bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 border-dashed p-4 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2"
                                         >
                                             <Plus className="w-5 h-5 text-yellow-500" />
-                                            <span className="text-xs font-bold text-yellow-500">Otro / Eventual</span>
+                                            <span className="text-xs font-bold text-yellow-500">Otro</span>
                                         </button>
+                                    </div>
+
+                                    {/* Today's History List */}
+                                    <div className="border-t border-white/10 pt-4 mt-2">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <p className="text-[10px] text-white/40 uppercase font-bold">Historial de Hoy</p>
+                                            <span className="text-xs font-mono text-emerald-400 font-bold">Total: S/. {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0)}</span>
+                                        </div>
+
+                                        <div className="bg-black/20 rounded-xl border border-white/5 p-2 max-h-[25vh] overflow-y-auto custom-scrollbar space-y-1">
+                                            {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).length === 0 ? (
+                                                <p className="text-center text-xs text-white/20 py-4 italic">Sin servicios hoy.</p>
+                                            ) : (
+                                                transactions
+                                                    .filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0)))
+                                                    .sort((a, b) => b.date.getTime() - a.date.getTime())
+                                                    .map(t => (
+                                                        <div key={t.id} className="flex justify-between items-center bg-white/5 p-2 rounded-lg text-xs">
+                                                            <div>
+                                                                <p className="font-bold text-white">{t.serviceName}</p>
+                                                                <p className="text-[10px] text-white/40">{t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                            </div>
+                                                            <p className="font-mono text-emerald-300">S/. {t.price}</p>
+                                                        </div>
+                                                    ))
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             ) : (

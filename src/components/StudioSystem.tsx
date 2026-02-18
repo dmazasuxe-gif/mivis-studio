@@ -211,7 +211,29 @@ export default function StudioSystem() {
     };
     const handleUpdateCommission = async (id: string, val: string) => await updateDoc(doc(db, "employees", id), { commission: val });
     const handleDeleteBooking = async (id: string) => { if (confirm("¿Cancelar cita?")) await deleteDoc(doc(db, "bookings", id)); };
-    const handleResetFinances = async () => alert("Contacta soporte para reset masivo seguro.");
+    const handleResetFinances = async () => {
+        if (!confirm("⚠️ ¿ESTÁS SEGURA?\n\nEsto eliminará:\n- Todo el historial de cobros\n- Todas las citas\n- Todos los gastos\n\nLos empleados y servicios NO se borrarán.")) return;
+        if (!confirm("⚠️ CONFIRMACIÓN FINAL\n\n¿Realmente deseas dejar el sistema en cero? Esta acción no se puede deshacer.")) return;
+
+        try {
+            // Delete Transactions
+            const tQ = await getDocs(collection(db, "transactions"));
+            tQ.forEach(async (d) => await deleteDoc(d.ref));
+
+            // Delete Bookings
+            const bQ = await getDocs(collection(db, "bookings"));
+            bQ.forEach(async (d) => await deleteDoc(d.ref));
+
+            // Delete Expenses
+            const eQ = await getDocs(collection(db, "expenses"));
+            eQ.forEach(async (d) => await deleteDoc(d.ref));
+
+            alert("✨ Sistema reiniciado correctamente.\n¡Lista para un nuevo mes!");
+            window.location.reload(); // Reload to refresh state cleanly
+        } catch (e) {
+            alert("Error al reiniciar. Intenta de nuevo.");
+        }
+    };
 
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewEmpPhoto(reader.result as string); reader.readAsDataURL(file); } };
 
@@ -383,6 +405,14 @@ export default function StudioSystem() {
                                 </div>
                             </div>
                             <button onClick={handleUpdatePin} className="btn-primary w-full py-4 mt-6">Actualizar Clave</button>
+
+                            <div className="mt-8 pt-8 border-t border-white/10">
+                                <h4 className="text-red-400 font-bold mb-2 text-center text-xs uppercase tracking-widest">Zona de Peligro</h4>
+                                <button onClick={handleResetFinances} className="w-full border border-red-500/30 hover:bg-red-500/20 text-red-300 py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-xs">
+                                    <RotateCcw className="w-4 h-4" /> Reiniciar Mes (Borrar Historial)
+                                </button>
+                                <p className="text-[10px] text-white/30 text-center mt-2">Mantiene empleados y servicios. Solo borra cobros y citas.</p>
+                            </div>
                         </Modal>
                     )}
 

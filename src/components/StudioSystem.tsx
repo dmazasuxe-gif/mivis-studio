@@ -146,8 +146,16 @@ export default function StudioSystem() {
                     utterance.pitch = 1.1; // Higher pitch to cut through noise
                     utterance.volume = 1.0; // MAX Volume (0 to 1)
 
-                    // Speak
+                    // Speak TWICE
                     window.speechSynthesis.speak(utterance);
+
+                    // Small pause mechanism not robust in all browsers, so simply queueing again works best in simple implementations
+                    const utterance2 = new SpeechSynthesisUtterance(message);
+                    utterance2.lang = 'es-ES';
+                    utterance2.rate = 1.0;
+                    utterance2.pitch = 1.1;
+                    utterance2.volume = 1.0;
+                    window.speechSynthesis.speak(utterance2);
 
                     // Mark as alerted
                     setAlertedBookings(prev => {
@@ -256,6 +264,16 @@ export default function StudioSystem() {
                 paymentMethod: transPayment
             });
         }
+
+
+
+        // 🔊 ALERT: Worker Available
+        const msg = `Atención, ${selectedEmp.name} ha terminado un servicio y está disponible.`;
+        const utterance = new SpeechSynthesisUtterance(msg);
+        utterance.lang = 'es-ES';
+        utterance.volume = 1.0;
+        utterance.pitch = 1.1;
+        window.speechSynthesis.speak(utterance);
 
         setSelService(null);
         setManPrice('');

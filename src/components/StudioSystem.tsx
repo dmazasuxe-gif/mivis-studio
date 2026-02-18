@@ -26,8 +26,8 @@ const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // P
 // --- Tipos Adaptados para Firebase ---
 type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; };
 type SimpleExpense = { id: string; category: string; amount: number; description: string; date: Date; };
-type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; }; // Added paymentMethod
-type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; paymentMethod?: string; }; // Added paymentMethod
+type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; };
+type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; paymentMethod?: string; paymentVoucher?: string; }; // Added Voucher
 type ServiceItem = { id: string; name: string; };
 
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
@@ -445,14 +445,22 @@ export default function StudioSystem() {
                                     <div>
                                         <p className="text-[10px] text-white/40 uppercase font-bold">Servicio</p>
                                         <p className="text-white">{selectedBooking.service}</p>
-                                        <p className="text-xs text-white/50">con {employees.find(e => e.id === selectedBooking.professionalId)?.name || 'Especialista'}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] text-white/40 uppercase font-bold">Método de Pago Preferido</p>
+                                        <p className="text-[10px] text-white/40 uppercase font-bold">Método de Pago</p>
                                         <div className="bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-md text-sm font-bold inline-block border border-yellow-500/20">
                                             {selectedBooking.paymentMethod || 'No especificado'}
                                         </div>
                                     </div>
+
+                                    {selectedBooking.paymentVoucher && (
+                                        <div className="col-span-2">
+                                            <p className="text-[10px] text-white/40 uppercase font-bold mb-2">Comprobante de Pago</p>
+                                            <div className="rounded-xl overflow-hidden border border-white/10">
+                                                <img src={selectedBooking.paymentVoucher} className="w-full object-cover" alt="Voucher" />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <button onClick={() => handleConfirmWhatsApp(selectedBooking)} className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold py-4 rounded-xl mt-6 flex items-center justify-center gap-2 shadow-lg transition-all">
@@ -569,16 +577,17 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
                                     <h4 className="font-bold text-white flex items-center gap-2">
                                         {b.clientName}
                                         {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
+                                        {b.paymentVoucher && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30">Pago 📎</span>}
                                     </h4>
                                     <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                    <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span> • <span className="text-yellow-500/80">{emp?.name}</span></div>
+                                    <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span></div>
                                 </div>
                                 <div className="text-white/20 group-hover:text-yellow-500 transition-colors"><ChevronRight className="w-5 h-5" /></div>
                             </div>
                         )
-                    })}</div>
-                )}
+                    })}
             </div>
+                )}
         </div>
     )
 }
@@ -587,16 +596,25 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
     const [cName, setCName] = useState('');
     const [cPhone, setCPhone] = useState('');
     const [bService, setBService] = useState('');
-    const [bProf, setBProf] = useState('');
-    const [bDate, setBDate] = useState('');
-    const [bTime, setBTime] = useState('');
     const [bPayment, setBPayment] = useState(PAY_METHODS[0]);
+    const [voucher, setVoucher] = useState<string | null>(null);
+
+    const handleVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => setVoucher(reader.result as string);
+            reader.readAsDataURL(file);
+        }
+    };
 
     const handleSubmit = () => {
-        if (!cName || !bService || !bProf || !bDate || !bTime) return alert("Completa todos los campos");
+        if (!cName || !bService || !bDate || !bTime) return alert("Completa todos los campos");
+        if ((bPayment === 'YAPE' || bPayment === 'PLIN') && !voucher) return alert("Por favor sube el comprobante de pago");
+        
         const dateObj = new Date(bDate + 'T' + bTime);
-        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: bProf, date: dateObj, paymentMethod: bPayment });
-        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setBProf('');
+        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: 'pending', date: dateObj, paymentMethod: bPayment, paymentVoucher: voucher });
+        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setVoucher(null);
     };
 
     return (
@@ -611,26 +629,42 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
 
             <div>
                 <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Cómo prefieres pagar?</label>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap mb-4">
                     {PAY_METHODS.map(pm => (
                         <button key={pm} onClick={() => setBPayment(pm)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${bPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {pm}
                         </button>
                     ))}
                 </div>
+
+                <AnimatePresence>
+                    {(bPayment === 'YAPE' || bPayment === 'PLIN') && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
+                            <div className="flex flex-col items-center">
+                                <p className="text-sm text-yellow-500 font-bold mb-4 uppercase tracking-widest">Escanea para Pagar</p>
+                                <div className="w-48 h-48 bg-white p-2 rounded-xl mb-4">
+                                    <img src="/qr.png" alt="QR Yape/Plin" className="w-full h-full object-contain" onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"} />
+                                </div>
+                                <p className="text-xs text-white/50 mb-6 text-center">Realiza el pago y sube la captura aquí 👇</p>
+                                
+                                <label className="w-full relative cursor-pointer group">
+                                    <div className={`w-full h-12 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all ${voucher ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/20 hover:border-yellow-500 text-white/50'}`}>
+                                        <Camera className="w-5 h-5" />
+                                        <span className="text-xs font-bold">{voucher ? 'Comprobante Listo ✅' : 'Subir Comprobante'}</span>
+                                    </div>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleVoucherUpload} />
+                                </label>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             <div>
                 <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Qué te harás hoy?</label>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="relative">
-                        <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
-                    </div>
-                    <div className="relative">
-                        <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}><option value="">Especialista...</option>{employees.map((e: Employee) => <option key={e.id} value={e.id} className="bg-neutral-900">{e.name}</option>)}</select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
-                    </div>
+                <div className="relative">
+                    <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                 </div>
             </div>
 

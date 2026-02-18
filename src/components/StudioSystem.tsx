@@ -37,7 +37,8 @@ type ReportSectionProps = { employees: Employee[]; transactions: Transaction[]; 
 type BookingSectionProps = { bookings: Booking[]; employees: Employee[]; services: ServiceItem[]; onAdd: (data: any) => void; onDelete: (id: string) => void; onSelect: (b: Booking) => void; };
 
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
-const PAY_METHODS = ["EFECTIVO", "YAPE", "PLIN", "POS", "TARJETA"];
+const PAY_METHODS = ["YAPE", "PLIN"];
+const ADMIN_PAY_METHODS = ["EFECTIVO", "YAPE", "PLIN", "POS", "TARJETA"];
 
 export default function StudioSystem() {
     // Datos
@@ -523,7 +524,7 @@ export default function StudioSystem() {
                                                 <div className="flex gap-2 mb-2">
                                                     <input type="number" placeholder="Monto Parcial" className="input-modern w-24 text-center py-1 text-sm font-mono" value={splitAmount} onChange={e => setSplitAmount(e.target.value)} />
                                                     <div className="flex-1 flex gap-1 overflow-x-auto custom-scrollbar pb-1">
-                                                        {PAY_METHODS.map(pm => (
+                                                        {ADMIN_PAY_METHODS.map(pm => (
                                                             <button key={pm} onClick={() => addSplitPart(pm)} className="bg-emerald-900/40 border border-emerald-500/20 text-emerald-100 text-[10px] px-2 rounded hover:bg-emerald-500 hover:text-black whitespace-nowrap transition-colors">{pm}</button>
                                                         ))}
                                                     </div>
@@ -533,7 +534,7 @@ export default function StudioSystem() {
                                             <>
                                                 <label className="text-xs text-white/40 uppercase font-bold block mb-2 text-center">Método de Pago</label>
                                                 <div className="flex gap-2 justify-center flex-wrap">
-                                                    {PAY_METHODS.map(pm => (
+                                                    {ADMIN_PAY_METHODS.map(pm => (
                                                         <button key={pm} onClick={() => setTransPayment(pm)} className={`px-3 py-1 rounded-full text-xs font-bold border ${transPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
                                                             {pm}
                                                         </button>
@@ -604,7 +605,8 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
     const [cName, setCName] = useState('');
     const [cPhone, setCPhone] = useState('');
     const [bService, setBService] = useState('');
-    const [bPayment, setBPayment] = useState(PAY_METHODS[0]);
+    const METHODS_TO_SHOW = isClient ? PAY_METHODS : ADMIN_PAY_METHODS;
+    const [bPayment, setBPayment] = useState(METHODS_TO_SHOW[0]);
     const [voucher, setVoucher] = useState<string | null>(null);
     const [bDate, setBDate] = useState('');
     const [bTime, setBTime] = useState('');
@@ -640,7 +642,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             <div>
                 <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Cómo prefieres pagar?</label>
                 <div className="flex gap-2 flex-wrap mb-4">
-                    {PAY_METHODS.map(pm => (
+                    {METHODS_TO_SHOW.map(pm => (
                         <button key={pm} onClick={() => setBPayment(pm)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${bPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {pm}
                         </button>

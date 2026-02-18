@@ -605,28 +605,31 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
     const [cName, setCName] = useState('');
     const [cPhone, setCPhone] = useState('');
     const [bService, setBService] = useState('');
-    const METHODS_TO_SHOW = isClient ? PAY_METHODS : ADMIN_PAY_METHODS;
-    const [bPayment, setBPayment] = useState(METHODS_TO_SHOW[0]);
-    const [voucher, setVoucher] = useState<string | null>(null);
+    const [professionalId, setProfessionalId] = useState('');
     const [bDate, setBDate] = useState('');
     const [bTime, setBTime] = useState('');
 
-    const handleVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => setVoucher(reader.result as string);
-            reader.readAsDataURL(file);
+    const handleEmployeeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const empId = e.target.value;
+        setProfessionalId(empId);
+
+        // Auto-select service based on employee role
+        const emp = employees.find(em => em.id === empId);
+        if (emp) {
+            // Simple heuristic: if a service name contains the role or vice-versa
+            const matchingService = services.find(s => s.name.toLowerCase().includes(emp.role.toLowerCase()) || emp.role.toLowerCase().includes(s.name.toLowerCase()));
+            if (matchingService) {
+                setBService(matchingService.name);
+            }
         }
     };
 
     const handleSubmit = () => {
         if (!cName || !bService || !bDate || !bTime) return alert("Completa todos los campos");
-        if ((bPayment === 'YAPE' || bPayment === 'PLIN') && !voucher) return alert("Por favor sube el comprobante de pago");
 
         const dateObj = new Date(bDate + 'T' + bTime);
-        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: 'pending', date: dateObj, paymentMethod: bPayment, paymentVoucher: voucher });
-        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setVoucher(null);
+        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: professionalId || 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null });
+        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setProfessionalId('');
     };
 
     return (
@@ -636,47 +639,19 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                 <div className="space-y-3">
                     <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
                     <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
-                    <p className="text-yellow-500 font-bold text-xs uppercase tracking-wide mt-2 ml-1">⚠️ LA CITA SE RESERVA CON 20 SOLES</p>
+                    <p className="text-yellow-500 font-bold text-xs uppercase tracking-wide mt-2 ml-1">⚠️ LA CITA SE RESERVA CON EL 50% DEL SERVICIO</p>
                 </div>
             </div>
 
             <div>
-                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Cómo prefieres pagar?</label>
-                <div className="flex gap-2 flex-wrap mb-4">
-                    {METHODS_TO_SHOW.map(pm => (
-                        <button key={pm} onClick={() => setBPayment(pm)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${bPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/10'}`}>
-                            {pm}
-                        </button>
-                    ))}
+                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Profesional (Opcional)</label>
+                <div className="relative">
+                    <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={professionalId} onChange={handleEmployeeChange}>
+                        <option value="">Cualquiera...</option>
+                        {employees.map((e: Employee) => <option key={e.id} value={e.id} className="bg-neutral-900">{e.name} ({e.role})</option>)}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                 </div>
-
-                <AnimatePresence>
-                    {(bPayment === 'YAPE' || bPayment === 'PLIN') && (
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
-                            <div className="flex flex-col items-center">
-                                <p className="text-sm text-yellow-500 font-bold mb-4 uppercase tracking-widest">Escanea para Pagar con {bPayment}</p>
-                                <div className="w-48 h-48 bg-white p-2 rounded-xl mb-4">
-                                    <img
-                                        src={bPayment === 'PLIN' ? '/qrplin.jpeg' : '/qryape.jpeg?v=2'}
-                                        alt={`QR ${bPayment}`}
-                                        className="w-full h-full object-contain"
-                                        onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"}
-                                    />
-                                </div>
-
-                                <p className="text-xs text-white/50 mb-2 text-center">Realiza el pago y sube la captura aquí 👇</p>
-
-                                <label className="w-full relative cursor-pointer group">
-                                    <div className={`w-full h-12 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all ${voucher ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/20 hover:border-yellow-500 text-white/50'}`}>
-                                        <Camera className="w-5 h-5" />
-                                        <span className="text-xs font-bold">{voucher ? 'Comprobante Listo ✅' : 'Subir Comprobante'}</span>
-                                    </div>
-                                    <input type="file" accept="image/*" className="hidden" onChange={handleVoucherUpload} />
-                                </label>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
 
             <div>

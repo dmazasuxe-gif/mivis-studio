@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
 import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
@@ -29,6 +29,12 @@ type SimpleExpense = { id: string; category: string; amount: number; description
 type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; };
 type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; paymentMethod?: string; paymentVoucher?: string; }; // Added Voucher
 type ServiceItem = { id: string; name: string; };
+
+// --- Prop Types ---
+type BookingFormProps = { employees: Employee[]; services: ServiceItem[]; onSubmit: (data: any) => void; isClient: boolean; };
+type FinanceSectionProps = { transactions: Transaction[]; expenses: SimpleExpense[]; onAdd: (data: any) => void; onDelete: (id: string) => void; onReset: () => void; };
+type ReportSectionProps = { employees: Employee[]; transactions: Transaction[]; onUpdateComm: (id: string, val: string) => void; };
+type BookingSectionProps = { bookings: Booking[]; employees: Employee[]; services: ServiceItem[]; onAdd: (data: any) => void; onDelete: (id: string) => void; onSelect: (b: Booking) => void; };
 
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
 const PAY_METHODS = ["EFECTIVO", "YAPE", "PLIN", "POS", "TARJETA"];
@@ -551,7 +557,7 @@ export default function StudioSystem() {
 
 // --- SUB-COMPONENTES AUXILIARES ---
 // (BookingSection, BookingForm, FinanceSection, etc. se mantienen igual pero integrados en el dashboard)
-function BookingSection({ bookings, employees, services, onAdd, onDelete, onSelect }: any) {
+function BookingSection({ bookings, employees, services, onAdd, onDelete, onSelect }: BookingSectionProps) {
     const sortedBookings = [...bookings].sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
     return (
         <div className="grid md:grid-cols-2 gap-8 animate-in fade-in">
@@ -566,38 +572,42 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
                 {sortedBookings.length === 0 ? (
                     <p className="text-white/30 text-center py-10 italic">No hay citas pendientes.</p>
                 ) : (
-                    <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">{sortedBookings.map((b: Booking) => {
-                        const emp = employees.find((e: Employee) => e.id === b.professionalId);
-                        // Alert Logic: Show red dot if appointment is within 15 minutes
-                        const isSoon = new Date().getTime() > b.date.getTime() - 900000 && new Date().getTime() < b.date.getTime();
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
+                        {sortedBookings.map((b: Booking) => {
+                            const emp = employees.find((e: Employee) => e.id === b.professionalId);
+                            // Alert Logic: Show red dot if appointment is within 15 minutes
+                            const isSoon = new Date().getTime() > b.date.getTime() - 900000 && new Date().getTime() < b.date.getTime();
 
-                        return (
-                            <div key={b.id} onClick={() => onSelect(b)} className={`bg-white/5 border-l-4 p-4 rounded-r-xl flex justify-between items-center group cursor-pointer hover:bg-white/10 transition-colors ${isSoon ? 'border-l-red-500 bg-red-500/5' : 'border-l-yellow-600'}`}>
-                                <div>
-                                    <h4 className="font-bold text-white flex items-center gap-2">
-                                        {b.clientName}
-                                        {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
-                                        {b.paymentVoucher && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30">Pago 📎</span>}
-                                    </h4>
-                                    <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                    <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span></div>
+                            return (
+                                <div key={b.id} onClick={() => onSelect(b)} className={`bg-white/5 border-l-4 p-4 rounded-r-xl flex justify-between items-center group cursor-pointer hover:bg-white/10 transition-colors ${isSoon ? 'border-l-red-500 bg-red-500/5' : 'border-l-yellow-600'}`}>
+                                    <div>
+                                        <h4 className="font-bold text-white flex items-center gap-2">
+                                            {b.clientName}
+                                            {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
+                                            {b.paymentVoucher && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30">Pago 📎</span>}
+                                        </h4>
+                                        <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span></div>
+                                    </div>
+                                    <div className="text-white/20 group-hover:text-yellow-500 transition-colors"><ChevronRight className="w-5 h-5" /></div>
                                 </div>
-                                <div className="text-white/20 group-hover:text-yellow-500 transition-colors"><ChevronRight className="w-5 h-5" /></div>
-                            </div>
-                        )
-                    })}
-            </div>
+                            );
+                        })}
+                    </div>
                 )}
+            </div>
         </div>
-    )
+    );
 }
 
-function BookingForm({ employees, services, onSubmit, isClient }: any) {
+function BookingForm({ employees, services, onSubmit, isClient }: BookingFormProps) {
     const [cName, setCName] = useState('');
     const [cPhone, setCPhone] = useState('');
     const [bService, setBService] = useState('');
     const [bPayment, setBPayment] = useState(PAY_METHODS[0]);
     const [voucher, setVoucher] = useState<string | null>(null);
+    const [bDate, setBDate] = useState('');
+    const [bTime, setBTime] = useState('');
 
     const handleVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -611,7 +621,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
     const handleSubmit = () => {
         if (!cName || !bService || !bDate || !bTime) return alert("Completa todos los campos");
         if ((bPayment === 'YAPE' || bPayment === 'PLIN') && !voucher) return alert("Por favor sube el comprobante de pago");
-        
+
         const dateObj = new Date(bDate + 'T' + bTime);
         onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: 'pending', date: dateObj, paymentMethod: bPayment, paymentVoucher: voucher });
         setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setVoucher(null);
@@ -646,7 +656,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
                                     <img src="/qr.png" alt="QR Yape/Plin" className="w-full h-full object-contain" onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"} />
                                 </div>
                                 <p className="text-xs text-white/50 mb-6 text-center">Realiza el pago y sube la captura aquí 👇</p>
-                                
+
                                 <label className="w-full relative cursor-pointer group">
                                     <div className={`w-full h-12 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all ${voucher ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/20 hover:border-yellow-500 text-white/50'}`}>
                                         <Camera className="w-5 h-5" />
@@ -686,36 +696,122 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
     )
 }
 
-function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: any) {
-    const [amt, setAmt] = useState(''); const [desc, setDesc] = useState(''); const [cat, setCat] = useState(EXPENSE_CATS[0]);
-    const now = new Date(); const isCurrentMonth = (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    const monthlyIncome = transactions.filter((t: any) => isCurrentMonth(t.date)).reduce((acc: number, t: any) => acc + t.price, 0);
-    const monthlyExpenses = expenses.filter((e: any) => isCurrentMonth(e.date)).reduce((acc: number, e: any) => acc + e.amount, 0);
+function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: FinanceSectionProps) {
+    const [amt, setAmt] = useState('');
+    const [desc, setDesc] = useState('');
+    const [cat, setCat] = useState(EXPENSE_CATS[0]);
+    const now = new Date();
+    const isCurrentMonth = (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+
+    const monthlyIncome = transactions.filter((t: Transaction) => isCurrentMonth(t.date)).reduce((acc: number, t: Transaction) => acc + t.price, 0);
+    const monthlyExpenses = expenses.filter((e: SimpleExpense) => isCurrentMonth(e.date)).reduce((acc: number, e: SimpleExpense) => acc + e.amount, 0);
     const profit = monthlyIncome - monthlyExpenses;
+
+    const handleSaveExpense = () => {
+        if (!amt) return;
+        onAdd({ category: cat, amount: parseFloat(amt), description: desc });
+        setAmt('');
+        setDesc('');
+    };
+
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                 <h2 className={`text-3xl text-yellow-500 ${playfair.className}`}>Finanzas: {now.toLocaleDateString('es-PE', { month: 'long' })}</h2>
-                <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2"><RotateCcw className="w-3 h-3" /> Reset</button>
+                <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
+                    <RotateCcw className="w-3 h-3" /> Reset
+                </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><StatCard label="Ingresos" val={monthlyIncome} icon={<ArrowDownCircle />} color="text-emerald-400" bg="bg-emerald-500/10" /><StatCard label="Gastos" val={monthlyExpenses} icon={<ArrowUpCircle />} color="text-rose-400" bg="bg-rose-500/10" /><StatCard label="Caja Neta" val={profit} icon={<Wallet />} color={profit >= 0 ? "text-white" : "text-red-400"} bg={profit >= 0 ? "bg-white/10" : "bg-red-500/10"} /></div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard label="Ingresos" val={monthlyIncome} icon={<ArrowDownCircle />} color="text-emerald-400" bg="bg-emerald-500/10" />
+                <StatCard label="Gastos" val={monthlyExpenses} icon={<ArrowUpCircle />} color="text-rose-400" bg="bg-rose-500/10" />
+                <StatCard label="Caja Neta" val={profit} icon={<Wallet />} color={profit >= 0 ? "text-white" : "text-red-400"} bg={profit >= 0 ? "bg-white/10" : "bg-red-500/10"} />
+            </div>
+
             <div className="grid md:grid-cols-2 gap-6 mt-4">
-                <div className="bg-white/5 border border-white/10 p-6 rounded-2xl h-fit"><h3 className="font-bold text-emerald-200 mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> Registrar Salida</h3><div className="space-y-4"><div><label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Concepto</label><select className="input-modern" value={cat} onChange={e => setCat(e.target.value)}>{EXPENSE_CATS.map(c => <option key={c} value={c} className="bg-[#0f2a24]">{c}</option>)}</select></div><div><label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Monto (S/.)</label><input type="number" placeholder="0.00" className="input-modern font-mono font-bold text-lg" value={amt} onChange={e => setAmt(e.target.value)} /></div><div><label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nota (Opcional)</label><input type="text" placeholder="Ej. Pago recibo..." className="input-modern" value={desc} onChange={e => setDesc(e.target.value)} /></div><button onClick={() => { if (!amt) return; onAdd({ category: cat, amount: parseFloat(amt), description: desc }); setAmt(''); setDesc(''); }} className="btn-primary w-full py-4 mt-2 bg-rose-600 from-rose-600 to-rose-500 shadow-rose-900/30 text-white">Guardar Gasto</button></div></div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col max-h-[500px]"><h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0">Historial (Mes Actual)</h3><div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-2">{[...expenses].filter((e: any) => isCurrentMonth(e.date)).sort((a: any, b: any) => b.date.getTime() - a.date.getTime()).map((exp: any) => (<div key={exp.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors group"><div><p className="font-bold text-rose-300">{exp.category}</p><p className="text-[10px] text-white/50 truncate w-32">{exp.description || exp.date.toLocaleDateString()}</p></div><div className="flex items-center gap-3"><span className="font-mono text-white font-bold">- S/. {exp.amount.toFixed(2)}</span><button onClick={() => onDelete(exp.id)} className="text-white/20 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button></div></div>))}</div></div>
+                <div className="bg-white/5 border border-white/10 p-6 rounded-2xl h-fit">
+                    <h3 className="font-bold text-emerald-200 mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> Registrar Salida</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Concepto</label>
+                            <select className="input-modern" value={cat} onChange={e => setCat(e.target.value)}>
+                                {EXPENSE_CATS.map(c => <option key={c} value={c} className="bg-[#0f2a24]">{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Monto (S/.)</label>
+                            <input type="number" placeholder="0.00" className="input-modern font-mono font-bold text-lg" value={amt} onChange={e => setAmt(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nota (Opcional)</label>
+                            <input type="text" placeholder="Ej. Pago recibo..." className="input-modern" value={desc} onChange={e => setDesc(e.target.value)} />
+                        </div>
+                        <button onClick={handleSaveExpense} className="btn-primary w-full py-4 mt-2 bg-rose-600 from-rose-600 to-rose-500 shadow-rose-900/30 text-white">Guardar Gasto</button>
+                    </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col max-h-[500px]">
+                    <h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0">Historial (Mes Actual)</h3>
+                    <div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-2">
+                        {[...expenses].filter((e: SimpleExpense) => isCurrentMonth(e.date)).sort((a: SimpleExpense, b: SimpleExpense) => b.date.getTime() - a.date.getTime()).map((exp: SimpleExpense) => (
+                            <div key={exp.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors group">
+                                <div>
+                                    <p className="font-bold text-rose-300">{exp.category}</p>
+                                    <p className="text-[10px] text-white/50 truncate w-32">{exp.description || exp.date.toLocaleDateString()}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="font-mono text-white font-bold">- S/. {exp.amount.toFixed(2)}</span>
+                                    <button onClick={() => onDelete(exp.id)} className="text-white/20 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </motion.div>
     );
 }
 
-function ReportSection({ employees, transactions, onUpdateComm }: any) {
-    const [tab, setTab] = useState<'day' | 'week' | 'month'>('week'); const [offset, setOffset] = useState(0); const now = new Date();
-    const [selectedRepEmp, setSelectedRepEmp] = useState<Employee | null>(null); // State for Employee Details in Reports
+function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionProps) {
+    const [tab, setTab] = useState<'day' | 'week' | 'month'>('week');
+    const [offset, setOffset] = useState(0);
+    const [selectedRepEmp, setSelectedRepEmp] = useState<Employee | null>(null);
+    const now = new Date();
 
-    const getRange = () => { const d = new Date(now); d.setHours(0, 0, 0, 0); let start = new Date(d); let end = new Date(d); if (tab === 'day') { start.setDate(d.getDate() + offset); end = new Date(start); } else if (tab === 'week') { const currentDay = d.getDay(); const diffParsed = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + (offset * 7); start.setDate(diffParsed); end = new Date(start); end.setDate(start.getDate() + 6); } else { start.setMonth(start.getMonth() + offset); start.setDate(1); end = new Date(start); end.setMonth(end.getMonth() + 1); end.setDate(0); } end.setHours(23, 59, 59, 999); return { start, end }; };
+    const getRange = () => {
+        const d = new Date(now);
+        d.setHours(0, 0, 0, 0);
+        let start = new Date(d);
+        let end = new Date(d);
+
+        if (tab === 'day') {
+            start.setDate(d.getDate() + offset);
+            end = new Date(start);
+        } else if (tab === 'week') {
+            const currentDay = d.getDay();
+            const diffParsed = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + (offset * 7);
+            start.setDate(diffParsed);
+            end = new Date(start);
+            end.setDate(start.getDate() + 6);
+        } else {
+            start.setMonth(start.getMonth() + offset);
+            start.setDate(1);
+            end = new Date(start);
+            end.setMonth(end.getMonth() + 1);
+            end.setDate(0);
+        }
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+    };
+
     const { start, end } = getRange();
-    let rangeLabel = ""; if (tab === 'day') rangeLabel = start.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' }); else if (tab === 'week') rangeLabel = `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-PE', { month: 'short' })}`; else rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
 
-    // --- REPORTES WHATSAPP DETALLADOS ---
+    let rangeLabel = "";
+    if (tab === 'day') rangeLabel = start.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+    else if (tab === 'week') rangeLabel = `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-PE', { month: 'short' })}`;
+    else rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+
     const sendDetailedWhatsApp = (title: string, trans: Transaction[], empName: string, commission: number | string) => {
         if (trans.length === 0) return alert("No hay datos para reportar.");
 
@@ -740,52 +836,38 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     };
 
-    // --- REPORTE PDF MENSUAL ---
     const generateMonthlyPDF = () => {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-        let htmlContent = `
-        <html><head><title>Reporte Mensual - Mivis Studio</title><style>
-            body { font-family: 'Helvetica', sans-serif; padding: 40px; }
-            h1 { color: #0f2a24; text-align: center; border-bottom: 2px solid #eab308; padding-bottom: 10px; }
-            .summary { background: #f0fdf4; padding: 20px; border-radius: 10px; margin-bottom: 30px; border: 1px solid #bbf7d0; }
-            .emp-card { margin-bottom: 30px; border: 1px solid #eee; page-break-inside: avoid; }
-            .emp-header { background: #0f2a24; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between; }
+        let htmlContent = `<html><head><title>Reporte Mensual</title><style>
+            body { font-family: Helvetica; padding: 40px; }
+            h1 { color: #0f2a24; text-align: center; border-bottom: 2px solid #eab308; }
             table { width: 100%; border-collapse: collapse; font-size: 12px; }
             th { background: #eee; text-align: left; padding: 8px; }
             td { padding: 8px; border-bottom: 1px solid #eee; }
             .total-row { font-weight: bold; background: #fffbeb; }
-        </style></head><body>
-        <h1>Reporte Mensual: ${monthStart.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' }).toUpperCase()}</h1>
-        `;
+            .emp-card { margin-bottom: 30px; border: 1px solid #eee; }
+            .emp-header { background: #0f2a24; color: white; padding: 8px; font-weight: bold; }
+        </style></head><body><h1>Reporte: ${monthStart.toLocaleDateString('es-PE', { month: 'long' })}</h1>`;
 
         employees.forEach((emp: Employee) => {
-            const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= monthStart && t.date <= monthEnd);
+            const empTrans = transactions.filter((t: Transaction) => t.employeeId === emp.id && t.date >= monthStart && t.date <= monthEnd);
             if (empTrans.length === 0) return;
 
-            const total = empTrans.reduce((s: number, t: any) => s + t.price, 0);
+            const total = empTrans.reduce((s: number, t: Transaction) => s + t.price, 0);
             const comm = Number(emp.commission) || 0;
             const pay = (total * comm) / 100;
 
-            htmlContent += `
-            <div class="emp-card">
-                <div class="emp-header"><span>${emp.name} (${emp.role})</span> <span>Comisión: ${comm}%</span></div>
-                <table>
-                    <thead><tr><th>Fecha</th><th>Servicio</th><th>Pago</th><th>Precio</th></tr></thead>
-                    <tbody>
-            `;
+            htmlContent += `<div class="emp-card"><div class="emp-header">${emp.name} (${comm}%)</div>
+            <table><thead><tr><th>Fecha</th><th>Servicio</th><th>Pago</th><th>Monto</th></tr></thead><tbody>`;
 
-            empTrans.sort((a: any, b: any) => a.date - b.date).forEach((t: any) => {
-                htmlContent += `<tr><td>${t.date.toLocaleDateString()} ${t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${t.serviceName}</td><td>${t.paymentMethod || '-'}</td><td>S/. ${t.price}</td></tr>`;
+            empTrans.sort((a: Transaction, b: Transaction) => a.date.getTime() - b.date.getTime()).forEach((t: Transaction) => {
+                htmlContent += `<tr><td>${t.date.toLocaleDateString()}</td><td>${t.serviceName}</td><td>${t.paymentMethod || '-'}</td><td>S/. ${t.price}</td></tr>`;
             });
 
-            htmlContent += `
-                    <tr class="total-row"><td colspan="3" style="text-align:right">TOTAL GENERADO:</td><td>S/. ${total.toFixed(2)}</td></tr>
-                    <tr class="total-row"><td colspan="3" style="text-align:right">A PAGAR (${comm}%):</td><td>S/. ${pay.toFixed(2)}</td></tr>
-                    </tbody>
-                </table>
-            </div>`;
+            htmlContent += `<tr class="total-row"><td colspan="3" align="right">TOTAL:</td><td>S/. ${total.toFixed(2)}</td></tr>
+            <tr class="total-row"><td colspan="3" align="right">PAGO:</td><td>S/. ${pay.toFixed(2)}</td></tr></tbody></table></div>`;
         });
 
         htmlContent += `<script>window.print();</script></body></html>`;
@@ -799,7 +881,6 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-white space-y-6">
-            {/* MODAL DETALLADO DEL EMPLEADO */}
             <AnimatePresence>
                 {selectedRepEmp && (
                     <Modal onClose={() => setSelectedRepEmp(null)}>
@@ -807,10 +888,8 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
                         <p className="text-xs text-white/40 text-center mb-6 uppercase tracking-widest">Historial de Servicios</p>
 
                         <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                            {/* HOY */}
-                            <ReportListBlock title="Hoy" transactions={transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)} onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)} />
-                            {/* ESTA SEMANA */}
-                            <ReportListBlock title="Esta Semana" transactions={transactions.filter((t: any) => {
+                            <ReportListBlock title="Hoy" transactions={transactions.filter((t: Transaction) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)} onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)} />
+                            <ReportListBlock title="Esta Semana" transactions={transactions.filter((t: Transaction) => {
                                 const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
                                 const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
                                 return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
@@ -819,8 +898,7 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
                                 const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
                                 return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
                             }), selectedRepEmp.name, selectedRepEmp.commission)} />
-                            {/* ESTE MES */}
-                            <ReportListBlock title="Este Mes" transactions={transactions.filter((t: any) => {
+                            <ReportListBlock title="Este Mes" transactions={transactions.filter((t: Transaction) => {
                                 const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
                             })} onSend={() => sendDetailedWhatsApp("Mensual", transactions.filter((t: any) => {
                                 const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
@@ -839,38 +917,78 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
             </div>
 
             <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="w-5 h-5" /></button></div>
+
             {tab === 'month' ? (
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                    <div className="grid grid-cols-4 bg-emerald-900/40 p-3 text-xs font-bold uppercase text-emerald-200/60 border-b border-emerald-500/10"> <div className="col-span-1">Colaborador</div> <div className="text-right">Ventas</div> <div className="text-right text-emerald-400">Pago (Com)</div> <div className="text-right text-yellow-500">Ganancia Local</div> </div>
+                    <div className="grid grid-cols-4 bg-emerald-900/40 p-3 text-xs font-bold uppercase text-emerald-200/60 border-b border-emerald-500/10">
+                        <div className="col-span-1">Colaborador</div> <div className="text-right">Ventas</div> <div className="text-right text-emerald-400">Pago (Com)</div> <div className="text-right text-yellow-500">Ganancia Local</div>
+                    </div>
                     <div className="divide-y divide-white/5">
-                        {employees.map((emp: Employee) => { const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = Number(emp.commission) || 0; const pay = (totalGen * commValue) / 100; const profit = totalGen - pay; return (<div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="grid grid-cols-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer"><div className="flex items-center gap-2"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-8 h-8 rounded-full object-cover" /><div className="truncate text-sm font-bold">{emp.name}</div></div><div className="text-right font-mono text-sm text-white/70">{totalGen.toFixed(2)}</div><div className="text-right font-mono text-sm text-emerald-400">{pay.toFixed(2)}</div><div className="text-right font-mono text-sm text-yellow-500 font-bold">{profit.toFixed(2)}</div></div>) })}
-                        <div className="grid grid-cols-4 p-4 bg-white/5 font-bold border-t border-white/10 mt-2"><div className="text-xs uppercase text-white/50">Total Mes</div><div className="text-right text-white">{employees.reduce((acc: number, emp: Employee) => acc + transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end).reduce((s: number, t: any) => s + t.price, 0), 0).toFixed(0)}</div><div className="text-right text-emerald-500">{employees.reduce((acc: number, emp: Employee) => acc + (transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end).reduce((s: number, t: any) => s + t.price, 0) * (Number(emp.commission) || 0) / 100), 0).toFixed(0)}</div><div className="text-right text-yellow-500">{employees.reduce((acc: number, emp: Employee) => { const total = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end).reduce((s: number, t: any) => s + t.price, 0); const pay = (total * (Number(emp.commission) || 0) / 100); return acc + (total - pay); }, 0).toFixed(0)}</div></div>
+                        {employees.map((emp: Employee) => {
+                            const empTrans = transactions.filter((t: Transaction) => t.employeeId === emp.id && t.date >= start && t.date <= end);
+                            const totalGen = empTrans.reduce((acc: number, t: Transaction) => acc + t.price, 0);
+                            const commValue = Number(emp.commission) || 0;
+                            const pay = (totalGen * commValue) / 100;
+                            const profit = totalGen - pay;
+                            return (
+                                <div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="grid grid-cols-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer">
+                                    <div className="flex items-center gap-2"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-8 h-8 rounded-full object-cover" alt={emp.name} /><div className="truncate text-sm font-bold">{emp.name}</div></div>
+                                    <div className="text-right font-mono text-sm text-white/70">{totalGen.toFixed(2)}</div>
+                                    <div className="text-right font-mono text-sm text-emerald-400">{pay.toFixed(2)}</div>
+                                    <div className="text-right font-mono text-sm text-yellow-500 font-bold">{profit.toFixed(2)}</div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
             ) : (
-                <div className="space-y-3">{employees.map((emp: Employee) => {
-                    const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = emp.commission === '' ? 0 : Number(emp.commission); const payment = (totalGen * commValue) / 100; return (<div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors cursor-pointer"><div className="flex items-center gap-3"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" /><div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div></div><div className="flex items-center gap-4 justify-end">
-                        <button onClick={(e) => { e.stopPropagation(); sendDetailedWhatsApp("General", empTrans, emp.name, commValue); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
-                        <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p><div className="flex items-center justify-end gap-1"><input type="text" onClick={e => e.stopPropagation()} className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} /><span className="text-xs text-yellow-600">%</span></div></div><div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div></div></div>);
-                })}</div>
+                <div className="space-y-3">
+                    {employees.map((emp: Employee) => {
+                        const empTrans = transactions.filter((t: Transaction) => t.employeeId === emp.id && t.date >= start && t.date <= end);
+                        const totalGen = empTrans.reduce((acc: number, t: Transaction) => acc + t.price, 0);
+                        const commValue = Number(emp.commission) || 0;
+                        const payment = (totalGen * commValue) / 100;
+
+                        return (
+                            <div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors cursor-pointer">
+                                <div className="flex items-center gap-3">
+                                    <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" alt={emp.name} />
+                                    <div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div>
+                                </div>
+                                <div className="flex items-center gap-4 justify-end">
+                                    <button onClick={(e) => { e.stopPropagation(); sendDetailedWhatsApp("General", empTrans, emp.name, commValue); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
+                                    <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <input type="text" onClick={e => e.stopPropagation()} className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} />
+                                            <span className="text-xs text-yellow-600">%</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             )}
         </motion.div>
     );
 }
 
-function ReportListBlock({ title, transactions, onSend }: any) {
+function ReportListBlock({ title, transactions, onSend }: { title: string, transactions: Transaction[], onSend: () => void }) {
     if (transactions.length === 0) return null;
     return (
         <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
             <h4 className="bg-emerald-900/30 p-2 text-[10px] font-bold uppercase text-emerald-400 tracking-wider flex justify-between items-center px-4">
                 <span>{title}</span>
                 <div className="flex items-center gap-4">
-                    <span>S/. {transactions.reduce((s: number, t: any) => s + t.price, 0).toFixed(2)}</span>
+                    <span>S/. {transactions.reduce((s: number, t: Transaction) => s + t.price, 0).toFixed(2)}</span>
                     <button onClick={onSend} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-1 rounded-full transition-all"><Send className="w-3 h-3" /></button>
                 </div>
             </h4>
             <div className="divide-y divide-white/5">
-                {transactions.sort((a: any, b: any) => b.date - a.date).map((t: any) => (
+                {transactions.sort((a: Transaction, b: Transaction) => b.date.getTime() - a.date.getTime()).map((t: Transaction) => (
                     <div key={t.id} className="p-3 flex justify-between items-center text-sm">
                         <div>
                             <p className="text-white font-medium">{t.serviceName || 'Servicio'}</p>
@@ -884,6 +1002,10 @@ function ReportListBlock({ title, transactions, onSend }: any) {
     )
 }
 
-function StatCard({ label, val, icon, color, bg }: any) { return (<div className={`p-6 rounded-2xl border border-white/5 ${bg}`}><div className={`flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider ${color}`}>{icon} {label}</div><div className={`text-3xl font-mono font-bold ${color}`}>S/. {val.toFixed(2)}</div></div>); }
-function NavBtn({ icon, label, active, onClick }: any) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
-function Modal({ children, onClose }: any) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }
+type StatCardProps = { label: string; val: number; icon: React.ReactNode; color: string; bg: string; };
+function StatCard({ label, val, icon, color, bg }: StatCardProps) { return (<div className={`p-6 rounded-2xl border border-white/5 ${bg}`}><div className={`flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider ${color}`}>{icon} {label}</div><div className={`text-3xl font-mono font-bold ${color}`}>S/. {val.toFixed(2)}</div></div>); }
+
+type NavBtnProps = { icon: React.ReactNode; label?: string; active: boolean; onClick: () => void; };
+function NavBtn({ icon, label, active, onClick }: NavBtnProps) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
+
+function Modal({ children, onClose }: { children: React.ReactNode, onClose: () => void }) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }

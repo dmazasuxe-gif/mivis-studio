@@ -256,10 +256,10 @@ export default function StudioSystem() {
     // 1. Sube tus imagenes a la carpeta 'public/gallery' que acabamos de crear.
     // 2. Cambia las URLs de abajo por '/gallery/tu-imagen.jpg'
     const GALLERY_IMAGES = [
-        { src: "https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop", x: -100, y: -100, delay: 0 },
-        { src: "https://images.unsplash.com/photo-1596704017254-9b1b1b9e0d2b?q=80&w=2548&auto=format&fit=crop", x: 100, y: -150, delay: 2 },
-        { src: "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=2000&auto=format&fit=crop", x: -150, y: 100, delay: 1 },
-        { src: "https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?q=80&w=2670&auto=format&fit=crop", x: 150, y: 150, delay: 3 },
+        { src: "\gallery\imagen1.jpeg", x: -100, y: -100, delay: 0 },
+        { src: "\gallery\imagen2.jpeg", x: 100, y: -150, delay: 2 },
+        { src: "\gallery\imagen3.jpeg", x: -150, y: 100, delay: 1 },
+        { src: "\gallery\imagen4.jpeg", x: 150, y: 150, delay: 3 },
     ];
     // State for image gallery modal
     const [selectedImage, setSelectedImage] = useState<string | null>(null);

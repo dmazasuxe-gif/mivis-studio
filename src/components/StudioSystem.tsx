@@ -256,10 +256,10 @@ export default function StudioSystem() {
     // 1. Sube tus imagenes a la carpeta 'public/gallery' que acabamos de crear.
     // 2. Cambia las URLs de abajo por '/gallery/tu-imagen.jpg'
     const GALLERY_IMAGES = [
-        { src: '\gallery\imagen1.jpeg', x: -100, y: -100, delay: 0 },
-        { src: '\gallery\imagen2.jpeg', x: 100, y: -150, delay: 2 },
-        { src: '\gallery\imagen3.jpeg', x: -150, y: 100, delay: 1 },
-        { src: '\gallery\imagen4.jpeg', x: 150, y: 150, delay: 3 },
+        { src: "C:\Users\Bienvenido\.gemini\antigravity\scratch\makeup-studio\public\gallery\imagen1.jpeg", x: -100, y: -100, delay: 0 },
+        { src: "C:\Users\Bienvenido\.gemini\antigravity\scratch\makeup-studio\public\gallery\imagen2.jpeg", x: 100, y: -150, delay: 2 },
+        { src: "C:\Users\Bienvenido\.gemini\antigravity\scratch\makeup-studio\public\gallery\imagen3.jpeg", x: -150, y: 100, delay: 1 },
+        { src: "C:\Users\Bienvenido\.gemini\antigravity\scratch\makeup-studio\public\gallery\imagen4.jpeg", x: 150, y: 150, delay: 3 },
     ];
     // State for image gallery modal
     const [selectedImage, setSelectedImage] = useState<string | null>(null);

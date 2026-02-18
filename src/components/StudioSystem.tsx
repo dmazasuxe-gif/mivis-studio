@@ -678,36 +678,7 @@ export default function StudioSystem() {
 
                             {!selService || isManaging ? (
                                 <div className="space-y-4">
-                                    {/* Clientes en Espera - Asignación Rápida */}
-                                    {!isManaging && (
-                                        <div className="mb-4">
-                                            <p className="text-[10px] text-white/40 uppercase font-bold mb-2">Clientes en Espera (Hoy)</p>
-                                            <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
-                                                {bookings.filter(b => b.date.getDate() === new Date().getDate() && (!b.professionalId || b.professionalId === 'pending')).length === 0 ? (
-                                                    <span className="text-xs text-white/20 italic">No hay clientes esperando.</span>
-                                                ) : (
-                                                    bookings.filter(b => b.date.getDate() === new Date().getDate() && (!b.professionalId || b.professionalId === 'pending')).map(b => (
-                                                        <button
-                                                            key={b.id}
-                                                            onClick={async () => {
-                                                                // Asignar y Cargar
-                                                                if (confirm(`¿Asignar ${b.clientName} a ${selectedEmp.name}?`)) {
-                                                                    await updateDoc(doc(db, "bookings", b.id), { professionalId: selectedEmp.id });
-                                                                    setSelService(b.service);
-                                                                    // Intentar adivinar precio (opcional, si existiera en un mapa de precios)
-                                                                }
-                                                            }}
-                                                            className="flex flex-col items-start bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-3 min-w-[140px] transition-all"
-                                                        >
-                                                            <span className="font-bold text-yellow-500 text-sm truncate w-full">{b.clientName}</span>
-                                                            <span className="text-[10px] text-white/60 truncate w-full">{b.service}</span>
-                                                            <span className="text-[10px] text-white/40">{b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                        </button>
-                                                    ))
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+
 
                                     <div className="max-h-[40vh] overflow-y-auto custom-scrollbar space-y-2">
                                         <p className="text-xs text-white/20 text-center italic mt-4">Selecciona un cliente en espera para atenderlo.</p>
@@ -862,13 +833,14 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
     const [bService, setBService] = useState('');
     const [bDate, setBDate] = useState('');
     const [bTime, setBTime] = useState('');
+    const [bProf, setBProf] = useState('');
 
     const handleSubmit = () => {
         if (!cName || !bService || !bDate || !bTime) return alert("Completa todos los campos");
 
         const dateObj = new Date(bDate + 'T' + bTime);
-        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null });
-        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService('');
+        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: bProf || 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null });
+        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setBProf('');
     };
 
     return (
@@ -889,6 +861,19 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                 </div>
             </div>
+
+            {!isClient && (
+                <div>
+                    <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Asignar Profesional (Opcional)</label>
+                    <div className="relative">
+                        <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
+                            <option value="">Ninguno (Pendiente)</option>
+                            {employees.map((emp: Employee) => <option key={emp.id} value={emp.id} className="bg-neutral-900">{emp.name}</option>)}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
                 <div>

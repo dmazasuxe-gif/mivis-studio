@@ -5,7 +5,7 @@ import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send, Printer
+    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send, Printer, AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -555,15 +555,27 @@ export default function StudioSystem() {
                                 <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-yellow-900/20"><Plus className="w-4 h-4" /> Nuevo</button>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                {employees.map(emp => {
+                                {employees.map((emp, i) => {
                                     const totalToday = transactions.filter(t => t.employeeId === emp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0);
+                                    const colorClass = PASTEL_COLORS[i % PASTEL_COLORS.length];
                                     return (
 
-                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }} className="group relative bg-white/5 border border-white/10 hover:border-yellow-500/50 rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all hover:bg-white/10">
-                                            <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="absolute top-2 right-2 p-2 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"><Trash2 className="w-4 h-4" /></button>
-                                            <div className="w-24 h-24 rounded-full p-1 border border-emerald-500/30 group-hover:border-yellow-500 transition-colors overflow-hidden relative"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full rounded-full bg-[#1a3830] object-cover" alt={emp.name} /></div>
-                                            <div className="text-center"><h3 className={`text-xl text-emerald-50 ${playfair.className}`}>{emp.name}</h3><p className="text-xs text-emerald-400 font-bold uppercase tracking-wider mt-1">{emp.role}</p></div>
-                                            <div className="w-full mt-2 pt-4 border-t border-white/5 flex justify-between items-end"><div><p className="text-[10px] text-white/40 font-bold uppercase">Hoy</p><p className="font-mono text-yellow-500 font-bold text-lg">S/. {totalToday}</p></div><ChevronRight className="w-5 h-5 text-emerald-500/50 group-hover:text-yellow-500 transition-colors" /></div>
+                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }} className={`group relative ${colorClass} rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]`}>
+                                            <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="absolute top-2 right-2 p-2 text-black/20 hover:text-red-600 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"><Trash2 className="w-4 h-4" /></button>
+                                            <div className="w-24 h-24 rounded-full p-1 border-2 border-white/40 group-hover:border-white transition-colors overflow-hidden relative shadow-md">
+                                                <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full rounded-full bg-white object-cover" alt={emp.name} />
+                                            </div>
+                                            <div className="text-center">
+                                                <h3 className={`text-xl font-bold leading-none mb-1`}>{emp.name}</h3>
+                                                <p className="text-xs font-bold uppercase tracking-wider opacity-60">{emp.role}</p>
+                                            </div>
+                                            <div className="w-full mt-2 pt-4 border-t border-black/10 flex justify-between items-end">
+                                                <div>
+                                                    <p className="text-[10px] opacity-50 font-bold uppercase">Hoy</p>
+                                                    <p className="font-mono font-bold text-lg">S/. {totalToday}</p>
+                                                </div>
+                                                <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                            </div>
                                         </motion.div>
                                     );
                                 })}
@@ -822,16 +834,10 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
 
                                     <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-2">
                                         {!isAssigned ? (
-                                            <select
-                                                className="bg-black/40 text-xs text-white/70 border border-white/10 rounded-lg p-2 w-full outline-none focus:border-yellow-500"
-                                                onChange={(e) => onAssign(b.id, e.target.value)}
-                                                defaultValue=""
-                                            >
-                                                <option value="" disabled>⚠️ Asignar Profesional...</option>
-                                                {employees.map(e => (
-                                                    <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
-                                                ))}
-                                            </select>
+                                            <div className="flex items-center gap-2 text-xs text-orange-300 bg-orange-500/10 px-3 py-2 rounded-lg w-full border border-orange-500/20">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                <span className="font-bold">Por Asignar (Ver Equipo)</span>
+                                            </div>
                                         ) : (
                                             <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg w-full border border-emerald-500/20">
                                                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold">{emp?.avatarSeed?.charAt(0)}</div>

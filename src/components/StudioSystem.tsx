@@ -5,7 +5,7 @@ import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send
+    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send, Printer
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -575,21 +575,86 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
     const { start, end } = getRange();
     let rangeLabel = ""; if (tab === 'day') rangeLabel = start.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' }); else if (tab === 'week') rangeLabel = `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-PE', { month: 'short' })}`; else rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
 
-    const handleWhatsApp = (emp: Employee) => {
-        // Calculate WEEKLY stats specifically for the report message, regardless of current tab view to match user preference
-        const d = new Date(); d.setHours(0, 0, 0, 0);
-        const currentDay = d.getDay();
-        const diffParsed = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
-        const weekStart = new Date(d); weekStart.setDate(diffParsed);
-        const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+    // --- REPORTES WHATSAPP DETALLADOS ---
+    const sendDetailedWhatsApp = (title: string, trans: Transaction[], empName: string, commission: number | string) => {
+        if (trans.length === 0) return alert("No hay datos para reportar.");
 
-        const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= weekStart && t.date <= weekEnd);
-        const total = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const comm = Number(emp.commission) || 0; const pay = (total * comm) / 100;
+        const total = trans.reduce((acc, t) => acc + t.price, 0);
+        const commVal = Number(commission) || 0;
+        const pay = (total * commVal) / 100;
 
-        const weekLabel = `${weekStart.getDate()} - ${weekEnd.getDate()} ${weekEnd.toLocaleDateString('es-PE', { month: 'short' })}`;
+        let msg = `*REPORTE ${title.toUpperCase()} - MIVIS STUDIO* 💄\n`;
+        msg += `👩‍🎨 Colaborador: *${empName}*\n`;
+        msg += `📅 Fecha: ${new Date().toLocaleDateString()}\n\n`;
+        msg += `*DETALLE DE SERVICIOS:*\n`;
 
-        const msg = `*Reporte Semanal MIVIS STUDIO* 💄\n\nHola ${emp.name},\nResumen de la semana: ${weekLabel}\n\n✅ *Servicios:* ${empTrans.length}\n💰 *Ventas Totales:* S/. ${total.toFixed(2)}\n📊 *Comisión:* ${comm}%\n\n💵 *Total a Pagar:* S/. ${pay.toFixed(2)}\n\nGracias por tu trabajo! ✨`;
+        trans.forEach(t => {
+            msg += `• ${t.serviceName} - S/.${t.price} (${t.paymentMethod || 'Efec.'})\n`;
+        });
+
+        msg += `\n-----------------------\n`;
+        msg += `✅ *Total Generado:* S/. ${total.toFixed(2)}\n`;
+        msg += `📊 *Comisión (${commVal}%):* S/. ${pay.toFixed(2)}\n`;
+        msg += `🚀 *A Pagar:* S/. ${pay.toFixed(2)}`;
+
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    };
+
+    // --- REPORTE PDF MENSUAL ---
+    const generateMonthlyPDF = () => {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        let htmlContent = `
+        <html><head><title>Reporte Mensual - Mivis Studio</title><style>
+            body { font-family: 'Helvetica', sans-serif; padding: 40px; }
+            h1 { color: #0f2a24; text-align: center; border-bottom: 2px solid #eab308; padding-bottom: 10px; }
+            .summary { background: #f0fdf4; padding: 20px; border-radius: 10px; margin-bottom: 30px; border: 1px solid #bbf7d0; }
+            .emp-card { margin-bottom: 30px; border: 1px solid #eee; page-break-inside: avoid; }
+            .emp-header { background: #0f2a24; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th { background: #eee; text-align: left; padding: 8px; }
+            td { padding: 8px; border-bottom: 1px solid #eee; }
+            .total-row { font-weight: bold; background: #fffbeb; }
+        </style></head><body>
+        <h1>Reporte Mensual: ${monthStart.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' }).toUpperCase()}</h1>
+        `;
+
+        employees.forEach((emp: Employee) => {
+            const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= monthStart && t.date <= monthEnd);
+            if (empTrans.length === 0) return;
+
+            const total = empTrans.reduce((s: number, t: any) => s + t.price, 0);
+            const comm = Number(emp.commission) || 0;
+            const pay = (total * comm) / 100;
+
+            htmlContent += `
+            <div class="emp-card">
+                <div class="emp-header"><span>${emp.name} (${emp.role})</span> <span>Comisión: ${comm}%</span></div>
+                <table>
+                    <thead><tr><th>Fecha</th><th>Servicio</th><th>Pago</th><th>Precio</th></tr></thead>
+                    <tbody>
+            `;
+
+            empTrans.sort((a: any, b: any) => a.date - b.date).forEach((t: any) => {
+                htmlContent += `<tr><td>${t.date.toLocaleDateString()} ${t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td>${t.serviceName}</td><td>${t.paymentMethod || '-'}</td><td>S/. ${t.price}</td></tr>`;
+            });
+
+            htmlContent += `
+                    <tr class="total-row"><td colspan="3" style="text-align:right">TOTAL GENERADO:</td><td>S/. ${total.toFixed(2)}</td></tr>
+                    <tr class="total-row"><td colspan="3" style="text-align:right">A PAGAR (${comm}%):</td><td>S/. ${pay.toFixed(2)}</td></tr>
+                    </tbody>
+                </table>
+            </div>`;
+        });
+
+        htmlContent += `<script>window.print();</script></body></html>`;
+
+        const printWindow = window.open('', '', 'width=900,height=800');
+        if (printWindow) {
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+        }
     };
 
     return (
@@ -603,23 +668,36 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
 
                         <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
                             {/* HOY */}
-                            <ReportListBlock title="Hoy" transactions={transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)} />
+                            <ReportListBlock title="Hoy" transactions={transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)} onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)} />
                             {/* ESTA SEMANA */}
                             <ReportListBlock title="Esta Semana" transactions={transactions.filter((t: any) => {
                                 const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
                                 const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
                                 return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
-                            })} />
+                            })} onSend={() => sendDetailedWhatsApp("Semanal", transactions.filter((t: any) => {
+                                const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
+                                return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                            }), selectedRepEmp.name, selectedRepEmp.commission)} />
                             {/* ESTE MES */}
                             <ReportListBlock title="Este Mes" transactions={transactions.filter((t: any) => {
                                 const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
-                            })} />
+                            })} onSend={() => sendDetailedWhatsApp("Mensual", transactions.filter((t: any) => {
+                                const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
+                            }), selectedRepEmp.name, selectedRepEmp.commission)} />
                         </div>
                     </Modal>
                 )}
             </AnimatePresence>
 
-            <div className="flex justify-between items-center"><h2 className={`text-2xl text-yellow-500 ${playfair.className}`}>Reportes</h2><div className="flex bg-white/5 p-1 rounded-lg">{['day', 'week', 'month'].map((t: any) => (<button key={t} onClick={() => { setTab(t); setOffset(0) }} className={`px-3 py-1 text-xs uppercase font-bold rounded ${tab === t ? 'bg-emerald-500 text-black' : 'text-white/50'}`}>{t === 'day' ? 'Diario' : t === 'week' ? 'Semana' : 'Mes'}</button>))}</div></div>
+            <div className="flex justify-between items-center">
+                <h2 className={`text-2xl text-yellow-500 ${playfair.className}`}>Reportes</h2>
+                <div className="flex gap-2">
+                    <button onClick={generateMonthlyPDF} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-lg text-xs font-bold transition-all border border-white/5"><Printer className="w-4 h-4" /> PDF Mensual</button>
+                    <div className="flex bg-white/5 p-1 rounded-lg">{['day', 'week', 'month'].map((t: any) => (<button key={t} onClick={() => { setTab(t); setOffset(0) }} className={`px-3 py-1 text-xs uppercase font-bold rounded ${tab === t ? 'bg-emerald-500 text-black' : 'text-white/50'}`}>{t === 'day' ? 'Diario' : t === 'week' ? 'Semana' : 'Mes'}</button>))}</div>
+                </div>
+            </div>
+
             <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="w-5 h-5" /></button></div>
             {tab === 'month' ? (
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
@@ -632,7 +710,7 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
             ) : (
                 <div className="space-y-3">{employees.map((emp: Employee) => {
                     const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = emp.commission === '' ? 0 : Number(emp.commission); const payment = (totalGen * commValue) / 100; return (<div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors cursor-pointer"><div className="flex items-center gap-3"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" /><div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div></div><div className="flex items-center gap-4 justify-end">
-                        <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(emp); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); sendDetailedWhatsApp("General", empTrans, emp.name, commValue); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
                         <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p><div className="flex items-center justify-end gap-1"><input type="text" onClick={e => e.stopPropagation()} className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} /><span className="text-xs text-yellow-600">%</span></div></div><div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div></div></div>);
                 })}</div>
             )}
@@ -640,13 +718,16 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
     );
 }
 
-function ReportListBlock({ title, transactions }: any) {
+function ReportListBlock({ title, transactions, onSend }: any) {
     if (transactions.length === 0) return null;
     return (
         <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
-            <h4 className="bg-emerald-900/30 p-2 text-[10px] font-bold uppercase text-emerald-400 tracking-wider flex justify-between">
+            <h4 className="bg-emerald-900/30 p-2 text-[10px] font-bold uppercase text-emerald-400 tracking-wider flex justify-between items-center px-4">
                 <span>{title}</span>
-                <span>S/. {transactions.reduce((s: number, t: any) => s + t.price, 0).toFixed(2)}</span>
+                <div className="flex items-center gap-4">
+                    <span>S/. {transactions.reduce((s: number, t: any) => s + t.price, 0).toFixed(2)}</span>
+                    <button onClick={onSend} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-1 rounded-full transition-all"><Send className="w-3 h-3" /></button>
+                </div>
             </h4>
             <div className="divide-y divide-white/5">
                 {transactions.sort((a: any, b: any) => b.date - a.date).map((t: any) => (

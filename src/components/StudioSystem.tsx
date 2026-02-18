@@ -643,11 +643,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                 <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Cómo prefieres pagar?</label>
                 <div className="flex gap-2 flex-wrap mb-4">
                     {METHODS_TO_SHOW.map(pm => (
-                        <button key={pm} onClick={() => {
-                            setBPayment(pm);
-                            if (isClient && pm === 'YAPE') setTimeout(() => window.open('yape://', '_blank'), 500);
-                            if (isClient && pm === 'PLIN') setTimeout(() => window.open('plin://', '_blank'), 500);
-                        }} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${bPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/10'}`}>
+                        <button key={pm} onClick={() => setBPayment(pm)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${bPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/10'}`}>
                             {pm}
                         </button>
                     ))}
@@ -657,17 +653,15 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                     {(bPayment === 'YAPE' || bPayment === 'PLIN') && (
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                             <div className="flex flex-col items-center">
-                                <p className="text-sm text-yellow-500 font-bold mb-4 uppercase tracking-widest">Escanea para Pagar</p>
+                                <p className="text-sm text-yellow-500 font-bold mb-4 uppercase tracking-widest">Escanea para Pagar con {bPayment}</p>
                                 <div className="w-48 h-48 bg-white p-2 rounded-xl mb-4">
-                                    <img src="/qryape.jpeg?v=2" alt="QR Yape/Plin" className="w-full h-full object-contain" onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"} />
+                                    <img
+                                        src={bPayment === 'PLIN' ? '/qrplin.jpeg' : '/qryape.jpeg?v=2'}
+                                        alt={`QR ${bPayment}`}
+                                        className="w-full h-full object-contain"
+                                        onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"}
+                                    />
                                 </div>
-
-                                <button
-                                    onClick={() => window.open(bPayment === 'YAPE' ? 'yape://' : 'plin://', '_blank')}
-                                    className={`mb-6 px-6 py-3 rounded-full font-bold text-white shadow-lg transition-transform hover:scale-105 flex items-center gap-2 ${bPayment === 'YAPE' ? 'bg-[#742284]' : 'bg-[#00A19B]'}`}
-                                >
-                                    Abrir App {bPayment} ↗
-                                </button>
 
                                 <p className="text-xs text-white/50 mb-2 text-center">Realiza el pago y sube la captura aquí 👇</p>
 

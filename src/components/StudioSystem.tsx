@@ -92,6 +92,9 @@ export default function StudioSystem() {
     const [splitParts, setSplitParts] = useState<{ method: string, amount: number }[]>([]);
     const [splitAmount, setSplitAmount] = useState('');
 
+    // Voice Alert State
+    const [alertedBookings, setAlertedBookings] = useState<Set<string>>(new Set());
+
     // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE (Optimized)
     useEffect(() => {
         // Try to enable offline persistence (Turboload features)
@@ -118,6 +121,45 @@ export default function StudioSystem() {
 
         return () => { unsubEmp(); unsubServ(); unsubTrans(); unsubExp(); unsubBook(); };
     }, []);
+
+    // 🔔 VOICE ALERT SYSTEM (15 Minutes)
+    useEffect(() => {
+        const checkAlerts = () => {
+            if (typeof window === 'undefined') return;
+
+            const now = new Date().getTime();
+            bookings.forEach(b => {
+                if (!b.date) return;
+
+                const timeDiff = b.date.getTime() - now;
+                // Check if within 15 minutes (900,000 ms) and not passed yet, and not alerted
+                const isFifteenMinutes = timeDiff > 0 && timeDiff <= 15 * 60 * 1000;
+
+                if (isFifteenMinutes && b.status !== 'completed' && !alertedBookings.has(b.id)) {
+                    // console.log("Triggering alert for:", b.clientName);
+
+                    // Create utterance
+                    const message = `Hora límite de cita de ${b.clientName || 'Cliente'}, por favor confirmar cita.`;
+                    const utterance = new SpeechSynthesisUtterance(message);
+                    utterance.lang = 'es-ES'; // Spanish
+                    utterance.rate = 0.9; // Slightly slower for clarity
+
+                    // Speak
+                    window.speechSynthesis.speak(utterance);
+
+                    // Mark as alerted
+                    setAlertedBookings(prev => {
+                        const next = new Set(prev);
+                        next.add(b.id);
+                        return next;
+                    });
+                }
+            });
+        };
+
+        const interval = setInterval(checkAlerts, 10000); // Check every 10 seconds
+        return () => clearInterval(interval);
+    }, [bookings, alertedBookings]);
 
     // --- LOGIC ---
 

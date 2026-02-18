@@ -26,11 +26,12 @@ const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // P
 // --- Tipos Adaptados para Firebase ---
 type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; };
 type SimpleExpense = { id: string; category: string; amount: number; description: string; date: Date; };
-type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; };
-type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; };
+type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; }; // Added paymentMethod
+type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; paymentMethod?: string; }; // Added paymentMethod
 type ServiceItem = { id: string; name: string; };
 
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
+const PAY_METHODS = ["EFECTIVO", "YAPE", "PLIN", "POS", "TARJETA"];
 
 export default function StudioSystem() {
     // Datos
@@ -50,7 +51,7 @@ export default function StudioSystem() {
 
     // Admin Actions State
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null); // New State for Booking Modal
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [newPin, setNewPin] = useState('');
@@ -62,6 +63,7 @@ export default function StudioSystem() {
     const [newEmpPhoto, setNewEmpPhoto] = useState<string | null>(null);
     const [selService, setSelService] = useState<string | null>(null);
     const [manPrice, setManPrice] = useState('');
+    const [transPayment, setTransPayment] = useState(PAY_METHODS[0]); // New state for transaction payment
     const [isManaging, setIsManaging] = useState(false);
     const [newServName, setNewServName] = useState('');
 
@@ -155,7 +157,21 @@ export default function StudioSystem() {
     };
 
     const handleDeleteService = async (id: string) => await deleteDoc(doc(db, "services", id));
-    const handleTransaction = async () => { const p = parseFloat(manPrice); if (!selectedEmp || isNaN(p) || p <= 0) return; await addDoc(collection(db, "transactions"), { employeeId: selectedEmp.id, serviceName: selService, price: p, date: new Date() }); setSelService(null); setManPrice(''); alert('Cobro registrado ☁️'); };
+    const handleTransaction = async () => {
+        const p = parseFloat(manPrice);
+        if (!selectedEmp || isNaN(p) || p <= 0) return;
+        await addDoc(collection(db, "transactions"), {
+            employeeId: selectedEmp.id,
+            serviceName: selService,
+            price: p,
+            date: new Date(),
+            paymentMethod: transPayment // Save Payment Method
+        });
+        setSelService(null);
+        setManPrice('');
+        setTransPayment(PAY_METHODS[0]); // Reset
+        alert('Cobro registrado ☁️');
+    };
     const handleUpdateCommission = async (id: string, val: string) => await updateDoc(doc(db, "employees", id), { commission: val });
     const handleDeleteBooking = async (id: string) => { if (confirm("¿Cancelar cita?")) await deleteDoc(doc(db, "bookings", id)); };
     const handleResetFinances = async () => alert("Contacta soporte para reset masivo seguro.");
@@ -303,7 +319,7 @@ export default function StudioSystem() {
                                 {employees.map(emp => {
                                     const totalToday = transactions.filter(t => t.employeeId === emp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0);
                                     return (
-                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); }} className="group relative bg-white/5 border border-white/10 hover:border-yellow-500/50 rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all hover:bg-white/10">
+                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); }} className="group relative bg-white/5 border border-white/10 hover:border-yellow-500/50 rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all hover:bg-white/10">
                                             <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="absolute top-2 right-2 p-2 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"><Trash2 className="w-4 h-4" /></button>
                                             <div className="w-24 h-24 rounded-full p-1 border border-emerald-500/30 group-hover:border-yellow-500 transition-colors overflow-hidden relative"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full rounded-full bg-[#1a3830] object-cover" alt={emp.name} /></div>
                                             <div className="text-center"><h3 className={`text-xl text-emerald-50 ${playfair.className}`}>{emp.name}</h3><p className="text-xs text-emerald-400 font-bold uppercase tracking-wider mt-1">{emp.role}</p></div>
@@ -363,6 +379,12 @@ export default function StudioSystem() {
                                         <p className="text-white">{selectedBooking.service}</p>
                                         <p className="text-xs text-white/50">con {employees.find(e => e.id === selectedBooking.professionalId)?.name || 'Especialista'}</p>
                                     </div>
+                                    <div>
+                                        <p className="text-[10px] text-white/40 uppercase font-bold">Método de Pago Preferido</p>
+                                        <div className="bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-md text-sm font-bold inline-block border border-yellow-500/20">
+                                            {selectedBooking.paymentMethod || 'No especificado'}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <button onClick={() => handleConfirmWhatsApp(selectedBooking)} className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold py-4 rounded-xl mt-6 flex items-center justify-center gap-2 shadow-lg transition-all">
@@ -383,13 +405,33 @@ export default function StudioSystem() {
                             {!selService || isManaging ? (
                                 <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar">{isManaging && <div className="flex gap-2 mb-4"><input type="text" className="input-modern flex-1 text-sm py-2" placeholder="Nuevo Servicio..." value={newServName} onChange={e => setNewServName(e.target.value)} /><button onClick={handleCreateService} className="btn-primary px-4 py-2 text-xs">OK</button></div>}{services.map(s => <button key={s.id} onClick={() => !isManaging && setSelService(s.name)} className={`w-full text-left p-4 rounded-xl border flex justify-between items-center transition-all ${isManaging ? 'border-dashed border-white/20 text-white/50' : 'bg-white/5 border-white/5 hover:border-yellow-500 hover:bg-white/10 text-emerald-100'}`}>{s.name}{isManaging && <span onClick={(e) => { e.stopPropagation(); handleDeleteService(s.id) }} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></span>}</button>)}</div>
                             ) : (
-                                <div className="flex flex-col items-center animate-in fade-in zoom-in-95"><button onClick={() => setSelService(null)} className="self-start text-xs text-emerald-400 mb-8 hover:underline">← Volver</button><h4 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>{selService}</h4><div className="relative w-full max-w-[180px] mb-8"><span className="absolute left-2 top-1/2 -translate-y-1/2 text-2xl text-white/30 font-serif">S/.</span><input autoFocus type="number" placeholder="0" className="w-full bg-transparent text-center text-5xl font-playfair text-white border-b-2 border-white/20 focus:border-yellow-500 outline-none pb-2" value={manPrice} onChange={e => setManPrice(e.target.value)} /></div><button onClick={handleTransaction} className="btn-primary w-full py-4 flex justify-center gap-2"><DollarSign className="w-5 h-5" /> Cobrar</button></div>
+                                <div className="flex flex-col items-center animate-in fade-in zoom-in-95">
+                                    <button onClick={() => setSelService(null)} className="self-start text-xs text-emerald-400 mb-8 hover:underline">← Volver</button>
+                                    <h4 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>{selService}</h4>
+                                    <div className="relative w-full max-w-[180px] mb-8">
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-2xl text-white/30 font-serif">S/.</span>
+                                        <input autoFocus type="number" placeholder="0" className="w-full bg-transparent text-center text-5xl font-playfair text-white border-b-2 border-white/20 focus:border-yellow-500 outline-none pb-2" value={manPrice} onChange={e => setManPrice(e.target.value)} />
+                                    </div>
+                                    <div className="w-full mb-6">
+                                        <label className="text-xs text-white/40 uppercase font-bold block mb-2 text-center">Método de Pago</label>
+                                        <div className="flex gap-2 justify-center flex-wrap">
+                                            {PAY_METHODS.map(pm => (
+                                                <button key={pm} onClick={() => setTransPayment(pm)} className={`px-3 py-1 rounded-full text-xs font-bold border ${transPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
+                                                    {pm}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <button onClick={handleTransaction} className="btn-primary w-full py-4 flex justify-center gap-2">
+                                        <DollarSign className="w-5 h-5" /> Cobrar
+                                    </button>
+                                </div>
                             )}
                         </Modal>
                     )}
                 </AnimatePresence>
             </main>
-            <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div>
+            <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div >
     );
 }
 
@@ -442,11 +484,12 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
     const [bProf, setBProf] = useState('');
     const [bDate, setBDate] = useState('');
     const [bTime, setBTime] = useState('');
+    const [bPayment, setBPayment] = useState(PAY_METHODS[0]);
 
     const handleSubmit = () => {
         if (!cName || !bService || !bProf || !bDate || !bTime) return alert("Completa todos los campos");
         const dateObj = new Date(bDate + 'T' + bTime);
-        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: bProf, date: dateObj });
+        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: bProf, date: dateObj, paymentMethod: bPayment });
         setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setBProf('');
     };
 
@@ -457,6 +500,17 @@ function BookingForm({ employees, services, onSubmit, isClient }: any) {
                 <div className="space-y-3">
                     <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
                     <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
+                </div>
+            </div>
+
+            <div>
+                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Cómo prefieres pagar?</label>
+                <div className="flex gap-2 flex-wrap">
+                    {PAY_METHODS.map(pm => (
+                        <button key={pm} onClick={() => setBPayment(pm)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${bPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/10'}`}>
+                            {pm}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -515,6 +569,8 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: an
 
 function ReportSection({ employees, transactions, onUpdateComm }: any) {
     const [tab, setTab] = useState<'day' | 'week' | 'month'>('week'); const [offset, setOffset] = useState(0); const now = new Date();
+    const [selectedRepEmp, setSelectedRepEmp] = useState<Employee | null>(null); // State for Employee Details in Reports
+
     const getRange = () => { const d = new Date(now); d.setHours(0, 0, 0, 0); let start = new Date(d); let end = new Date(d); if (tab === 'day') { start.setDate(d.getDate() + offset); end = new Date(start); } else if (tab === 'week') { const currentDay = d.getDay(); const diffParsed = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + (offset * 7); start.setDate(diffParsed); end = new Date(start); end.setDate(start.getDate() + 6); } else { start.setMonth(start.getMonth() + offset); start.setDate(1); end = new Date(start); end.setMonth(end.getMonth() + 1); end.setDate(0); } end.setHours(23, 59, 59, 999); return { start, end }; };
     const { start, end } = getRange();
     let rangeLabel = ""; if (tab === 'day') rangeLabel = start.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' }); else if (tab === 'week') rangeLabel = `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-PE', { month: 'short' })}`; else rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
@@ -538,25 +594,73 @@ function ReportSection({ employees, transactions, onUpdateComm }: any) {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-white space-y-6">
+            {/* MODAL DETALLADO DEL EMPLEADO */}
+            <AnimatePresence>
+                {selectedRepEmp && (
+                    <Modal onClose={() => setSelectedRepEmp(null)}>
+                        <h3 className={`${playfair.className} text-2xl text-yellow-500 text-center mb-1`}>{selectedRepEmp.name}</h3>
+                        <p className="text-xs text-white/40 text-center mb-6 uppercase tracking-widest">Historial de Servicios</p>
+
+                        <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                            {/* HOY */}
+                            <ReportListBlock title="Hoy" transactions={transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)} />
+                            {/* ESTA SEMANA */}
+                            <ReportListBlock title="Esta Semana" transactions={transactions.filter((t: any) => {
+                                const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
+                                return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                            })} />
+                            {/* ESTE MES */}
+                            <ReportListBlock title="Este Mes" transactions={transactions.filter((t: any) => {
+                                const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
+                            })} />
+                        </div>
+                    </Modal>
+                )}
+            </AnimatePresence>
+
             <div className="flex justify-between items-center"><h2 className={`text-2xl text-yellow-500 ${playfair.className}`}>Reportes</h2><div className="flex bg-white/5 p-1 rounded-lg">{['day', 'week', 'month'].map((t: any) => (<button key={t} onClick={() => { setTab(t); setOffset(0) }} className={`px-3 py-1 text-xs uppercase font-bold rounded ${tab === t ? 'bg-emerald-500 text-black' : 'text-white/50'}`}>{t === 'day' ? 'Diario' : t === 'week' ? 'Semana' : 'Mes'}</button>))}</div></div>
             <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="w-5 h-5" /></button></div>
             {tab === 'month' ? (
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-4 bg-emerald-900/40 p-3 text-xs font-bold uppercase text-emerald-200/60 border-b border-emerald-500/10"> <div className="col-span-1">Colaborador</div> <div className="text-right">Ventas</div> <div className="text-right text-emerald-400">Pago (Com)</div> <div className="text-right text-yellow-500">Ganancia Local</div> </div>
                     <div className="divide-y divide-white/5">
-                        {employees.map((emp: Employee) => { const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = Number(emp.commission) || 0; const pay = (totalGen * commValue) / 100; const profit = totalGen - pay; return (<div key={emp.id} className="grid grid-cols-4 p-4 items-center hover:bg-white/5 transition-colors"><div className="flex items-center gap-2"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-8 h-8 rounded-full object-cover" /><div className="truncate text-sm font-bold">{emp.name}</div></div><div className="text-right font-mono text-sm text-white/70">{totalGen.toFixed(2)}</div><div className="text-right font-mono text-sm text-emerald-400">{pay.toFixed(2)}</div><div className="text-right font-mono text-sm text-yellow-500 font-bold">{profit.toFixed(2)}</div></div>) })}
+                        {employees.map((emp: Employee) => { const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = Number(emp.commission) || 0; const pay = (totalGen * commValue) / 100; const profit = totalGen - pay; return (<div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="grid grid-cols-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer"><div className="flex items-center gap-2"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-8 h-8 rounded-full object-cover" /><div className="truncate text-sm font-bold">{emp.name}</div></div><div className="text-right font-mono text-sm text-white/70">{totalGen.toFixed(2)}</div><div className="text-right font-mono text-sm text-emerald-400">{pay.toFixed(2)}</div><div className="text-right font-mono text-sm text-yellow-500 font-bold">{profit.toFixed(2)}</div></div>) })}
                         <div className="grid grid-cols-4 p-4 bg-white/5 font-bold border-t border-white/10 mt-2"><div className="text-xs uppercase text-white/50">Total Mes</div><div className="text-right text-white">{employees.reduce((acc: number, emp: Employee) => acc + transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end).reduce((s: number, t: any) => s + t.price, 0), 0).toFixed(0)}</div><div className="text-right text-emerald-500">{employees.reduce((acc: number, emp: Employee) => acc + (transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end).reduce((s: number, t: any) => s + t.price, 0) * (Number(emp.commission) || 0) / 100), 0).toFixed(0)}</div><div className="text-right text-yellow-500">{employees.reduce((acc: number, emp: Employee) => { const total = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end).reduce((s: number, t: any) => s + t.price, 0); const pay = (total * (Number(emp.commission) || 0) / 100); return acc + (total - pay); }, 0).toFixed(0)}</div></div>
                     </div>
                 </div>
             ) : (
                 <div className="space-y-3">{employees.map((emp: Employee) => {
-                    const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = emp.commission === '' ? 0 : Number(emp.commission); const payment = (totalGen * commValue) / 100; return (<div key={emp.id} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors"><div className="flex items-center gap-3"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" /><div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div></div><div className="flex items-center gap-4 justify-end">
-                        <button onClick={() => handleWhatsApp(emp)} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
-                        <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p><div className="flex items-center justify-end gap-1"><input type="text" className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} /><span className="text-xs text-yellow-600">%</span></div></div><div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div></div></div>);
+                    const empTrans = transactions.filter((t: any) => t.employeeId === emp.id && t.date >= start && t.date <= end); const totalGen = empTrans.reduce((acc: number, t: any) => acc + t.price, 0); const commValue = emp.commission === '' ? 0 : Number(emp.commission); const payment = (totalGen * commValue) / 100; return (<div key={emp.id} onClick={() => setSelectedRepEmp(emp)} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-yellow-500/30 transition-colors cursor-pointer"><div className="flex items-center gap-3"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-10 h-10 object-cover rounded-full bg-[#1a3830]" /><div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div></div><div className="flex items-center gap-4 justify-end">
+                        <button onClick={(e) => { e.stopPropagation(); handleWhatsApp(emp); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
+                        <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div><div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p><div className="flex items-center justify-end gap-1"><input type="text" onClick={e => e.stopPropagation()} className="w-10 bg-transparent border-b border-white/20 text-right font-bold text-yellow-500 focus:border-yellow-500 outline-none" value={emp.commission} onChange={(e) => onUpdateComm(emp.id, e.target.value)} /><span className="text-xs text-yellow-600">%</span></div></div><div className="text-right pl-4 border-l border-white/10"><p className="text-[10px] text-white/40 uppercase font-bold">A Pagar</p><p className="font-mono text-xl font-bold text-emerald-400">S/. {payment.toFixed(2)}</p></div></div></div>);
                 })}</div>
             )}
         </motion.div>
     );
+}
+
+function ReportListBlock({ title, transactions }: any) {
+    if (transactions.length === 0) return null;
+    return (
+        <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+            <h4 className="bg-emerald-900/30 p-2 text-[10px] font-bold uppercase text-emerald-400 tracking-wider flex justify-between">
+                <span>{title}</span>
+                <span>S/. {transactions.reduce((s: number, t: any) => s + t.price, 0).toFixed(2)}</span>
+            </h4>
+            <div className="divide-y divide-white/5">
+                {transactions.sort((a: any, b: any) => b.date - a.date).map((t: any) => (
+                    <div key={t.id} className="p-3 flex justify-between items-center text-sm">
+                        <div>
+                            <p className="text-white font-medium">{t.serviceName || 'Servicio'}</p>
+                            <p className="text-[10px] text-white/40">{t.date.toLocaleString()} • <span className="text-yellow-500/80">{t.paymentMethod || 'Efectivo'}</span></p>
+                        </div>
+                        <span className="font-mono text-emerald-200">S/. {t.price}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
 }
 
 function StatCard({ label, val, icon, color, bg }: any) { return (<div className={`p-6 rounded-2xl border border-white/5 ${bg}`}><div className={`flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider ${color}`}>{icon} {label}</div><div className={`text-3xl font-mono font-bold ${color}`}>S/. {val.toFixed(2)}</div></div>); }

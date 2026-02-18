@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
+import React, { useState, useEffect, useRef, ChangeEvent, MouseEvent } from 'react';
 import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
@@ -256,10 +256,10 @@ export default function StudioSystem() {
     // 1. Sube tus imagenes a la carpeta 'public/gallery' que acabamos de crear.
     // 2. Cambia las URLs de abajo por '/gallery/tu-imagen.jpg'
     const GALLERY_IMAGES = [
-        { src: "\gallery\imagen1.jpeg", x: -100, y: -100, delay: 0 },
-        { src: "\gallery\imagen2.jpeg", x: 100, y: -150, delay: 2 },
-        { src: "\gallery\imagen3.jpeg", x: -150, y: 100, delay: 1 },
-        { src: "\gallery\imagen4.jpeg", x: 150, y: 150, delay: 3 },
+        { src: '\gallery\imagen1.jpeg', x: -100, y: -100, delay: 0 },
+        { src: '\gallery\imagen2.jpeg', x: 100, y: -150, delay: 2 },
+        { src: '\gallery\imagen3.jpeg', x: -150, y: 100, delay: 1 },
+        { src: '\gallery\imagen4.jpeg', x: 150, y: 150, delay: 3 },
     ];
     // State for image gallery modal
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -270,34 +270,9 @@ export default function StudioSystem() {
                 <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop')] bg-cover bg-center opacity-20 filter blur-sm"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#061814] via-[#061814]/80 to-transparent"></div>
 
-                {/* Floating Images Layer */}
+                {/* Floating Images Layer using Bouncing Gallery */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    {GALLERY_IMAGES.map((img, i) => (
-                        <motion.img
-                            key={i}
-                            src={img.src}
-                            onClick={() => setSelectedImage(img.src)}
-                            initial={{ opacity: 0, x: img.x, y: img.y }}
-                            animate={{
-                                opacity: [0.4, 0.8, 0.4],
-                                x: [img.x, img.x + (i % 2 === 0 ? 30 : -30), img.x],
-                                y: [img.y, img.y + (i % 2 === 0 ? -30 : 30), img.y],
-                            }}
-                            transition={{
-                                duration: 8 + i,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                                delay: img.delay
-                            }}
-                            className="absolute w-32 h-32 md:w-48 md:h-48 object-cover rounded-2xl shadow-2xl border border-white/10 cursor-pointer hover:scale-110 hover:border-yellow-500/50 hover:opacity-100 transition-all pointer-events-auto z-0"
-                            style={{
-                                top: i < 2 ? '10%' : 'auto',
-                                bottom: i >= 2 ? '10%' : 'auto',
-                                left: i % 2 === 0 ? '10%' : 'auto',
-                                right: i % 2 !== 0 ? '10%' : 'auto',
-                            }}
-                        />
-                    ))}
+                    <BouncingGallery images={GALLERY_IMAGES.map(g => g.src)} onSelect={setSelectedImage} />
                 </div>
 
                 {/* Main Content */}
@@ -1087,3 +1062,73 @@ type NavBtnProps = { icon: React.ReactNode; label?: string; active: boolean; onC
 function NavBtn({ icon, label, active, onClick }: NavBtnProps) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
 
 function Modal({ children, onClose }: { children: React.ReactNode, onClose: () => void }) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }
+
+// --- GALERÍA FLOTANTE (REBOTE) ---
+function BouncingGallery({ images, onSelect }: { images: string[], onSelect: (src: string) => void }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const boxSize = 150; // Image size
+    const items = useRef(images.map(() => ({
+        x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 500),
+        y: Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 500),
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: (Math.random() - 0.5) * 1.5,
+        target: null as HTMLImageElement | null
+    })));
+
+    useEffect(() => {
+        let animationId: number;
+        const animate = () => {
+            if (!containerRef.current) return;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            items.current.forEach((item, i) => {
+                // Update position
+                item.x += item.vx;
+                item.y += item.vy;
+
+                // Bounce off walls
+                if (item.x <= 0 || item.x >= width - boxSize) item.vx *= -1;
+                if (item.y <= 0 || item.y >= height - boxSize) item.vy *= -1;
+
+                // Simple collision with other items (optional fun effect)
+                // items.current.forEach((other, j) => {
+                //    if (i !== j) {
+                //        const dx = other.x - item.x;
+                //        const dy = other.y - item.y;
+                //        const dist = Math.sqrt(dx * dx + dy * dy);
+                //        if (dist < boxSize) {
+                //             // Simple elastic bounce
+                //             const tempVx = item.vx; const tempVy = item.vy;
+                //             item.vx = other.vx; item.vy = other.vy;
+                //             other.vx = tempVx; other.vy = tempVy;
+                //        }
+                //    }
+                // });
+
+                // Apply style
+                if (item.target) {
+                    item.target.style.transform = `translate(${item.x}px, ${item.y}px)`;
+                }
+            });
+            animationId = requestAnimationFrame(animate);
+        };
+        animationId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animationId);
+    }, []);
+
+    return (
+        <div ref={containerRef} className="absolute inset-0 overflow-hidden pointer-events-none">
+            {images.map((src, i) => (
+                <img
+                    key={i}
+                    ref={el => { items.current[i].target = el; }}
+                    src={src}
+                    onClick={() => onSelect(src)}
+                    className="absolute w-32 h-32 md:w-36 md:h-36 object-cover rounded-2xl shadow-2xl border border-white/10 cursor-pointer hover:scale-110 hover:border-yellow-500/50 hover:opacity-100 transition-transform pointer-events-auto opacity-60 z-0"
+                    style={{ left: 0, top: 0, willChange: 'transform' }}
+                />
+            ))}
+        </div>
+    );
+}

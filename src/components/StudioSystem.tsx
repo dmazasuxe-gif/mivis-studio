@@ -636,6 +636,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                 <div className="space-y-3">
                     <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
                     <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
+                    <p className="text-yellow-500 font-bold text-xs uppercase tracking-wide mt-2 ml-1">⚠️ LA CITA SE RESERVA CON 20 SOLES</p>
                 </div>
             </div>
 

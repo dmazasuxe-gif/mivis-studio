@@ -569,12 +569,32 @@ export default function StudioSystem() {
                                                 <h3 className={`text-xl font-bold leading-none mb-1`}>{emp.name}</h3>
                                                 <p className="text-xs font-bold uppercase tracking-wider opacity-60">{emp.role}</p>
                                             </div>
-                                            <div className="w-full mt-2 pt-4 border-t border-black/10 flex justify-between items-end">
-                                                <div>
-                                                    <p className="text-[10px] opacity-50 font-bold uppercase">Hoy</p>
-                                                    <p className="font-mono font-bold text-lg">S/. {totalToday}</p>
+                                            <div className="w-full mt-2 pt-4 border-t border-black/10 flex flex-col gap-2">
+                                                {/* Current Client Display */}
+                                                {(() => {
+                                                    const currentBooking = bookings
+                                                        .filter(b => b.professionalId === emp.id && b.status !== 'completed' && b.date.getDate() === new Date().getDate())
+                                                        .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+
+                                                    if (currentBooking) {
+                                                        return (
+                                                            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 text-center mb-1 animate-in fade-in">
+                                                                <p className="text-[10px] text-yellow-600 font-bold uppercase tracking-wider mb-1">En este momento</p>
+                                                                <p className="text-sm font-bold text-yellow-500 truncate">{currentBooking.clientName}</p>
+                                                                <p className="text-[10px] text-white/50">{currentBooking.service}</p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+
+                                                <div className="flex justify-between items-end">
+                                                    <div>
+                                                        <p className="text-[10px] opacity-50 font-bold uppercase">Hoy</p>
+                                                        <p className="font-mono font-bold text-lg">S/. {totalToday}</p>
+                                                    </div>
+                                                    <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
                                                 </div>
-                                                <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
                                             </div>
                                         </motion.div>
                                     );
@@ -680,8 +700,27 @@ export default function StudioSystem() {
                                 <div className="space-y-4">
 
 
-                                    <div className="max-h-[40vh] overflow-y-auto custom-scrollbar space-y-2">
-                                        <p className="text-xs text-white/20 text-center italic mt-4">Selecciona un cliente en espera para atenderlo.</p>
+                                    <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto custom-scrollbar p-1">
+                                        {services.map(s => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => setSelService(s.name)}
+                                                className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-yellow-500/50 p-4 rounded-xl text-left transition-all group"
+                                            >
+                                                <span className="font-bold text-emerald-100 group-hover:text-yellow-500 transition-colors block mb-1">{s.name}</span>
+                                                <span className="text-[10px] text-white/30 uppercase tracking-widest">Registrar</span>
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={() => {
+                                                const custom = prompt("Nombre del servicio eventual:");
+                                                if (custom) setSelService(custom);
+                                            }}
+                                            className="bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 border-dashed p-4 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2"
+                                        >
+                                            <Plus className="w-5 h-5 text-yellow-500" />
+                                            <span className="text-xs font-bold text-yellow-500">Otro / Eventual</span>
+                                        </button>
                                     </div>
                                 </div>
                             ) : (

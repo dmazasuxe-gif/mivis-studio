@@ -24,10 +24,10 @@ import {
 const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // Preload font
 
 // --- Tipos Adaptados para Firebase ---
-type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; };
+type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; password?: string; };
 type SimpleExpense = { id: string; category: string; amount: number; description: string; date: Date; };
 type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; };
-type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending'; paymentMethod?: string; paymentVoucher?: string; }; // Added Voucher
+type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending' | 'completed'; paymentMethod?: string; paymentVoucher?: string; }; // Added 'completed' status
 type ServiceItem = { id: string; name: string; };
 
 // --- Prop Types ---
@@ -60,7 +60,7 @@ export default function StudioSystem() {
     const [adminPin, setAdminPin] = useState("1234"); // Default PIN
 
     // UI State
-    const [view, setView] = useState<'LANDING' | 'PIN_ENTRY' | 'ADMIN_DASHBOARD' | 'CLIENT_BOOKING' | 'WORKER_SELECT' | 'WORKER_DASHBOARD'>('LANDING');
+    const [view, setView] = useState<'LANDING' | 'PIN_ENTRY' | 'ADMIN_DASHBOARD' | 'CLIENT_BOOKING' | 'WORKER_SELECT' | 'WORKER_LOGIN' | 'WORKER_DASHBOARD'>('LANDING'); // Added WORKER_LOGIN
     const [activeTab, setActiveTab] = useState<'HOME' | 'FINANCE' | 'REPORTS' | 'BOOKINGS'>('HOME'); // Sub-tabs for Admin
     const [pinInput, setPinInput] = useState("");
     const [pinError, setPinError] = useState(false);
@@ -78,6 +78,7 @@ export default function StudioSystem() {
     const [newEmpName, setNewEmpName] = useState('');
     const [newEmpRole, setNewEmpRole] = useState('');
     const [newEmpComm, setNewEmpComm] = useState('40');
+    const [newEmpPass, setNewEmpPass] = useState(''); // New Emp Password
     const [newEmpPhoto, setNewEmpPhoto] = useState<string | null>(null);
     const [selService, setSelService] = useState<string | null>(null);
     const [manPrice, setManPrice] = useState('');
@@ -154,8 +155,15 @@ export default function StudioSystem() {
     // FIX: Employee Create now closes modal
     const handleCreateEmployee = async () => {
         if (!newEmpName) return;
-        await addDoc(collection(db, "employees"), { name: newEmpName, role: newEmpRole || 'Profesional', photo: newEmpPhoto || null, avatarSeed: newEmpName, commission: Number(newEmpComm) || 40 });
-        setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null);
+        await addDoc(collection(db, "employees"), {
+            name: newEmpName,
+            role: newEmpRole || 'Profesional',
+            photo: newEmpPhoto || null,
+            avatarSeed: newEmpName,
+            commission: Number(newEmpComm) || 40,
+            password: newEmpPass || '1234'
+        });
+        setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null); setNewEmpPass('');
         setShowAddModal(false); // Close Modal Automatically!
         alert("✅ Trabajador Creado Correctamente");
     };
@@ -305,7 +313,7 @@ export default function StudioSystem() {
                                 key={emp.id}
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => { setCurrentWorker(emp); setView('WORKER_DASHBOARD'); }}
+                                onClick={() => { setCurrentWorker(emp); setView('WORKER_LOGIN'); setPinInput(""); }}
                                 className={`${colorClass} p-6 rounded-2xl flex flex-col items-center gap-4 border-2 transition-all shadow-lg`}
                             >
                                 <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 shadow-md">
@@ -323,9 +331,54 @@ export default function StudioSystem() {
         );
     }
 
+    // 2.5 WORKER LOGIN
+    if (view === 'WORKER_LOGIN' && currentWorker) {
+        return (
+            <div className="min-h-screen bg-[#0f2a24] flex items-center justify-center p-4">
+                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
+                    <div className="flex justify-center mb-6">
+                        <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-20 h-20 rounded-full border-4 border-yellow-500 bg-white" />
+                    </div>
+                    <h2 className={`${playfair.className} text-xl text-white mb-2`}>Hola, {currentWorker.name}</h2>
+                    <p className="text-white/40 text-xs mb-6">Ingresa tu clave de acceso</p>
+
+                    <div className="flex justify-center gap-2 mb-8">
+                        {[0, 1, 2, 3].map(i => (
+                            <div key={i} className={`w-3 h-3 rounded-full transition-all ${pinInput.length > i ? 'bg-yellow-500' : 'bg-white/10'}`}></div>
+                        ))}
+                    </div>
+                    {pinError && <p className="text-red-400 text-xs mb-4 animate-shake">Clave Incorrecta</p>}
+
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                            <button key={n} onClick={() => setPinInput(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">{n}</button>
+                        ))}
+                        <div className="col-start-2"><button onClick={() => setPinInput(prev => (prev.length < 4 ? prev + 0 : prev))} className="w-full h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">0</button></div>
+                        <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors"><X className="w-6 h-6" /></button></div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button onClick={() => { setView('WORKER_SELECT'); setCurrentWorker(null); }} className="flex-1 py-3 rounded-xl border border-white/10 text-xs text-white/50 hover:bg-white/5">Cancelar</button>
+                        <button onClick={() => {
+                            if (pinInput === (currentWorker.password || '1234')) {
+                                setView('WORKER_DASHBOARD');
+                                setPinInput("");
+                                setPinError(false);
+                            } else {
+                                setPinError(true);
+                                setPinInput("");
+                                setTimeout(() => setPinError(false), 1000);
+                            }
+                        }} className="flex-1 py-3 rounded-xl bg-yellow-600 text-black font-bold text-sm hover:bg-yellow-500">Entrar</button>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+
     // 3. WORKER DASHBOARD
     if (view === 'WORKER_DASHBOARD' && currentWorker) {
-        const myBookings = bookings.filter(b => b.professionalId === currentWorker.id && b.status === 'confirmed'); // Assuming 'confirmed' is active. 'finished' would be done.
+        const myBookings = bookings.filter(b => b.professionalId === currentWorker.id && (b.status === 'confirmed' || b.status === 'completed' || b.status === 'pending'));
 
         return (
             <div className="min-h-screen bg-[#0f2a24] p-6">
@@ -353,14 +406,18 @@ export default function StudioSystem() {
                         ) : (
                             <div className="space-y-4">
                                 {myBookings.map(b => (
-                                    <div key={b.id} className="bg-black/20 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
+                                    <div key={b.id} className={`bg-black/20 border border-white/5 p-5 rounded-2xl flex flex-col gap-4 ${b.status === 'completed' ? 'opacity-50' : ''}`}>
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <h3 className="text-lg font-bold text-white">{b.clientName}</h3>
+                                                <h3 className={`text-lg font-bold text-white ${b.status === 'completed' ? 'line-through text-white/50' : ''}`}>{b.clientName}</h3>
                                                 <p className="text-emerald-400 text-sm font-medium">{b.service}</p>
                                             </div>
                                             <div className="text-right">
-                                                <span className="bg-yellow-500/20 text-yellow-500 text-[10px] px-2 py-1 rounded-full border border-yellow-500/20 font-bold uppercase">En Proceso</span>
+                                                {b.status === 'completed' ?
+                                                    <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-1 rounded-full border border-emerald-500/20 font-bold uppercase">Terminado</span>
+                                                    :
+                                                    <span className="bg-yellow-500/20 text-yellow-500 text-[10px] px-2 py-1 rounded-full border border-yellow-500/20 font-bold uppercase">En Proceso</span>
+                                                }
                                             </div>
                                         </div>
 
@@ -369,24 +426,18 @@ export default function StudioSystem() {
                                             <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {b.date.toLocaleDateString()}</span>
                                         </div>
 
-                                        <button
-                                            onClick={async () => {
-                                                if (confirm(`¿Terminaste con ${b.clientName}?`)) {
-                                                    // Mark as done? Or delete from pending? 
-                                                    // For now, let's update status to 'finished' so it disappears from this list but stays in admin history/payment queue if we had one. 
-                                                    // Wait, transactions are usually created by payment. 
-                                                    // The user said: "den el termino de su servicio".
-                                                    // Let's assume we just delete it from active bookings or mark it done. 
-                                                    // Admin flow usually deletes booking when paid. 
-                                                    // I'll update status to 'finished' and maybe Admin sees it differently? 
-                                                    // For now, let's keep it simple: Just mark status 'completed'.
-                                                    await updateDoc(doc(db, "bookings", b.id), { status: 'completed' });
-                                                }
-                                            }}
-                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all mt-2"
-                                        >
-                                            <CheckCircle2 className="w-5 h-5" /> Terminar Servicio
-                                        </button>
+                                        {b.status !== 'completed' && (
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm(`¿Terminaste con ${b.clientName}?`)) {
+                                                        await updateDoc(doc(db, "bookings", b.id), { status: 'completed' });
+                                                    }
+                                                }}
+                                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all mt-2"
+                                            >
+                                                <CheckCircle2 className="w-5 h-5" /> Terminar Servicio
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -603,7 +654,7 @@ export default function StudioSystem() {
                         </Modal>
                     )}
 
-                    {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
+                    {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /><input type="text" placeholder="Contraseña (4 dígitos)" className="input-modern" maxLength={4} value={newEmpPass} onChange={e => setNewEmpPass(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
                     {selectedEmp && (
                         <Modal onClose={() => setSelectedEmp(null)}>
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10"><div className="flex items-center gap-3"><img src={selectedEmp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedEmp.avatarSeed}`} className="w-12 h-12 object-cover rounded-full bg-[#1a3830]" /><div><h3 className={`${playfair.className} text-xl text-white`}>{selectedEmp.name}</h3></div></div><button onClick={() => setIsManaging(!isManaging)} className="p-2 text-emerald-400 hover:bg-white/5 rounded-full"><Settings className="w-5 h-5" /></button></div>

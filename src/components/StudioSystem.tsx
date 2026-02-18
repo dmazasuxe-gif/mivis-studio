@@ -600,13 +600,18 @@ export default function StudioSystem() {
                     {selectedBooking && (
                         <Modal onClose={() => setSelectedBooking(null)}>
                             <div className="text-center relative">
-                                <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-2`}>Detalle de Cita</h3>
-                                {new Date().getTime() > selectedBooking.date.getTime() - 900000 && new Date().getTime() < selectedBooking.date.getTime() && (
+                                {selectedBooking.status === 'completed' && <div className="absolute top-1/2 left-0 w-full h-1 bg-red-500/80 -rotate-12 z-20 pointer-events-none"></div>}
+                                <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-2`}>
+                                    {selectedBooking.status === 'completed' ? 'Servicio Terminado' : 'Detalle de Cita'}
+                                </h3>
+                                {/* ... existing timestamp check ... */}
+                                {new Date().getTime() > selectedBooking.date.getTime() - 900000 && new Date().getTime() < selectedBooking.date.getTime() && selectedBooking.status !== 'completed' && (
                                     <div className="bg-red-500/20 text-red-400 text-xs font-bold px-3 py-1 rounded-full inline-block mb-4 animate-pulse border border-red-500/50">
                                         ⚠️ ¡La cita es en 15 min!
                                     </div>
                                 )}
-                                <div className="space-y-6 text-left bg-black/20 p-6 rounded-2xl border border-white/5">
+                                <div className={`space-y-6 text-left bg-black/20 p-6 rounded-2xl border border-white/5 relative overflow-hidden ${selectedBooking.status === 'completed' ? 'opacity-50' : ''}`}>
+                                    {selectedBooking.status === 'completed' && <div className="absolute inset-0 bg-black/20 z-10"></div>}
                                     <div>
                                         <p className="text-[10px] text-white/40 uppercase font-bold">Cliente</p>
                                         <p className="text-xl text-white font-medium">{selectedBooking.clientName}</p>
@@ -647,8 +652,8 @@ export default function StudioSystem() {
                                     <Send className="w-5 h-5" /> Confirmar por WhatsApp
                                 </button>
 
-                                <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20">
-                                    Cancelar Cita
+                                <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2">
+                                    <Trash2 className="w-4 h-4" /> Eliminar Cliente
                                 </button>
                             </div>
                         </Modal>

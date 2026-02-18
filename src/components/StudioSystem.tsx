@@ -245,19 +245,64 @@ export default function StudioSystem() {
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewEmpPhoto(reader.result as string); reader.readAsDataURL(file); } };
 
     // TURBO MODE: No loading screen blocking interaction. 
+    // TURBO MODE: No loading screen blocking interaction.
     // We render the UI immediately, data will pop in when ready.
 
     // --- VISTAS ---
 
     // 1. LANDING PAGE
+    // Floating Images Configuration
+    // INSTRUCCIONES PARA EL USUARIO:
+    // 1. Sube tus imagenes a la carpeta 'public/gallery' que acabamos de crear.
+    // 2. Cambia las URLs de abajo por '/gallery/tu-imagen.jpg'
+    const GALLERY_IMAGES = [
+        { src: "https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop", x: -100, y: -100, delay: 0 },
+        { src: "https://images.unsplash.com/photo-1596704017254-9b1b1b9e0d2b?q=80&w=2548&auto=format&fit=crop", x: 100, y: -150, delay: 2 },
+        { src: "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=2000&auto=format&fit=crop", x: -150, y: 100, delay: 1 },
+        { src: "https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?q=80&w=2670&auto=format&fit=crop", x: 150, y: 150, delay: 3 },
+    ];
+    // State for image gallery modal
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
     if (view === 'LANDING') {
         return (
             <div className="min-h-screen bg-[#061814] text-emerald-50 flex items-center justify-center p-6 relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop')] bg-cover bg-center opacity-20"></div>
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop')] bg-cover bg-center opacity-20 filter blur-sm"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#061814] via-[#061814]/80 to-transparent"></div>
 
+                {/* Floating Images Layer */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    {GALLERY_IMAGES.map((img, i) => (
+                        <motion.img
+                            key={i}
+                            src={img.src}
+                            onClick={() => setSelectedImage(img.src)}
+                            initial={{ opacity: 0, x: img.x, y: img.y }}
+                            animate={{
+                                opacity: [0.4, 0.8, 0.4],
+                                x: [img.x, img.x + (i % 2 === 0 ? 30 : -30), img.x],
+                                y: [img.y, img.y + (i % 2 === 0 ? -30 : 30), img.y],
+                            }}
+                            transition={{
+                                duration: 8 + i,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                                delay: img.delay
+                            }}
+                            className="absolute w-32 h-32 md:w-48 md:h-48 object-cover rounded-2xl shadow-2xl border border-white/10 cursor-pointer hover:scale-110 hover:border-yellow-500/50 hover:opacity-100 transition-all pointer-events-auto z-0"
+                            style={{
+                                top: i < 2 ? '10%' : 'auto',
+                                bottom: i >= 2 ? '10%' : 'auto',
+                                left: i % 2 === 0 ? '10%' : 'auto',
+                                right: i % 2 !== 0 ? '10%' : 'auto',
+                            }}
+                        />
+                    ))}
+                </div>
+
+                {/* Main Content */}
                 <div className="relative z-10 max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
-                    <div className="mb-8">
+                    <div className="mb-8 p-8 bg-black/20 backdrop-blur-md rounded-3xl border border-white/5 shadow-2xl">
                         <h1 className={`${playfair.className} text-5xl md:text-6xl text-yellow-500 mb-2 drop-shadow-lg`}>MIVIS</h1>
                         <p className="text-emerald-200/80 tracking-[0.4em] text-sm uppercase">Studio & Beauty</p>
                     </div>
@@ -269,9 +314,29 @@ export default function StudioSystem() {
                     </div>
                 </div>
 
+                {/* Image Modal */}
+                <AnimatePresence>
+                    {selectedImage && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" onClick={() => setSelectedImage(null)}>
+                            <motion.img
+                                layoutId={selectedImage}
+                                src={selectedImage}
+                                className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl border border-white/10"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <button className="absolute top-4 right-4 text-white p-2 bg-black/50 rounded-full hover:bg-white/20 transition-all">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                    )}
+                </AnimatePresence>
+
                 <button
                     onClick={() => setView('PIN_ENTRY')}
-                    className="absolute bottom-6 right-6 flex items-center gap-2 px-3 py-2 bg-black/40 hover:bg-black/60 text-white/30 hover:text-white rounded-lg text-xs font-medium transition-all border border-white/5 hover:border-white/20 backdrop-blur-sm"
+                    className="absolute bottom-6 right-6 flex items-center gap-2 px-3 py-2 bg-black/40 hover:bg-black/60 text-white/30 hover:text-white rounded-lg text-xs font-medium transition-all border border-white/5 hover:border-white/20 backdrop-blur-sm z-20"
                 >
                     <Lock className="w-3 h-3" /> Admin
                 </button>

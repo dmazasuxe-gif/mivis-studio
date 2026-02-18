@@ -809,7 +809,11 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
                                                 {b.clientName}
                                                 {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
                                                 {b.paymentVoucher && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30">Pago 📎</span>}
-                                                {isAssigned && <span className="text-[10px] bg-emerald-500 text-black px-2 rounded-full font-bold animate-pulse">EN ATENCIÓN ⚡</span>}
+                                                {b.status === 'completed' ? (
+                                                    <span className="text-[10px] bg-zinc-600 text-white px-2 rounded-full font-bold">SERVICIO TERMINADO</span>
+                                                ) : isAssigned && (
+                                                    <span className="text-[10px] bg-emerald-500 text-black px-2 rounded-full font-bold animate-pulse">EN ATENCIÓN ⚡</span>
+                                                )}
                                             </h4>
                                             <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                             <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span></div>

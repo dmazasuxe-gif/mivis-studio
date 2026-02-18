@@ -5,7 +5,7 @@ import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send, Printer, AlertTriangle
+    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send, Printer, AlertTriangle, Edit2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -64,7 +64,6 @@ export default function StudioSystem() {
     const [activeTab, setActiveTab] = useState<'HOME' | 'FINANCE' | 'REPORTS' | 'BOOKINGS'>('HOME'); // Sub-tabs for Admin
     const [pinInput, setPinInput] = useState("");
     const [pinError, setPinError] = useState(false);
-    const [isOffline, setIsOffline] = useState(false); // New Offline State
 
     // Admin Actions State
     const [currentWorker, setCurrentWorker] = useState<Employee | null>(null);
@@ -86,7 +85,7 @@ export default function StudioSystem() {
     const [manPrice, setManPrice] = useState('');
     const [transPayment, setTransPayment] = useState(PAY_METHODS[0]);
     const [isManaging, setIsManaging] = useState(false);
-    const [newServName, setNewServName] = useState('');
+
 
     // Split Payment State
     const [isSplit, setIsSplit] = useState(false);
@@ -104,7 +103,7 @@ export default function StudioSystem() {
                 const docRef = doc(db, "settings", "config");
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) setAdminPin(docSnap.data().pin || "1234");
-            } catch (e) { setIsOffline(true); }
+            } catch (e) { console.error(e); }
         };
         loadSettings();
 
@@ -172,12 +171,7 @@ export default function StudioSystem() {
         alert("✅ Trabajador Creado Correctamente");
     };
     // FIX: Service Create now clears input
-    const handleCreateService = async () => {
-        if (newServName) {
-            await addDoc(collection(db, "services"), { name: newServName });
-            setNewServName(''); // Clear input automatically!
-        }
-    };
+
 
     const handleEmployeeDelete = async (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (confirm('⚠️ ¿Eliminar miembro?')) await deleteDoc(doc(db, "employees", id)); };
     const handleBooking = async (book: any) => {
@@ -191,7 +185,7 @@ export default function StudioSystem() {
         window.open(`https://wa.me/51${book.clientPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     };
 
-    const handleDeleteService = async (id: string) => await deleteDoc(doc(db, "services", id));
+
     const handleTransaction = async () => {
         const totalP = parseFloat(manPrice);
         if (!selectedEmp || isNaN(totalP) || totalP <= 0) return;
@@ -670,6 +664,83 @@ export default function StudioSystem() {
                                     <RotateCcw className="w-4 h-4" /> Reiniciar Mes (Borrar Historial)
                                 </button>
                                 <p className="text-[10px] text-white/30 text-center mt-2">Mantiene empleados y servicios. Solo borra cobros y citas.</p>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* MODAL GESTION DE SERVICIOS */}
+                    {showServiceModal && (
+                        <Modal onClose={() => setShowServiceModal(false)}>
+                            <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Gestionar Servicios</h3>
+
+                            <div className="flex gap-2 mb-6">
+                                <input
+                                    type="text"
+                                    placeholder="Nuevo servicio..."
+                                    className="input-modern flex-1"
+                                    value={newServiceName}
+                                    onChange={e => setNewServiceName(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                        if (e.key === 'Enter' && newServiceName.trim()) {
+                                            await addDoc(collection(db, "services"), { name: newServiceName.trim() });
+                                            setNewServiceName('');
+                                        }
+                                    }}
+                                />
+                                <button
+                                    onClick={async () => {
+                                        if (newServiceName.trim()) {
+                                            await addDoc(collection(db, "services"), { name: newServiceName.trim() });
+                                            setNewServiceName('');
+                                        }
+                                    }}
+                                    className="bg-yellow-500 hover:bg-yellow-400 text-black p-3 rounded-xl transition-colors"
+                                >
+                                    <Plus className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+                                {services.map(s => (
+                                    <div key={s.id} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                                        {editingService?.id === s.id ? (
+                                            <div className="flex flex-1 gap-2 mr-2">
+                                                <input
+                                                    autoFocus
+                                                    className="bg-black/40 border border-white/20 rounded px-2 py-1 text-sm text-white w-full outline-none focus:border-yellow-500"
+                                                    value={editingService.name}
+                                                    onChange={e => setEditingService({ ...editingService, name: e.target.value })}
+                                                    onKeyDown={async (e) => {
+                                                        if (e.key === 'Enter') {
+                                                            await updateDoc(doc(db, "services", s.id), { name: editingService.name });
+                                                            setEditingService(null);
+                                                        }
+                                                    }}
+                                                />
+                                                <button onClick={async () => {
+                                                    await updateDoc(doc(db, "services", s.id), { name: editingService.name });
+                                                    setEditingService(null);
+                                                }} className="text-emerald-400 hover:text-emerald-300"><CheckCircle2 className="w-4 h-4" /></button>
+                                            </div>
+                                        ) : (
+                                            <span className="font-medium text-white/80">{s.name}</span>
+                                        )}
+
+                                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {editingService?.id !== s.id && (
+                                                <button onClick={() => setEditingService(s)} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Edit2 className="w-3 h-3" /></button>
+                                            )}
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm('¿Eliminar servicio?')) await deleteDoc(doc(db, "services", s.id));
+                                                }}
+                                                className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </Modal>
                     )}

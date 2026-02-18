@@ -72,7 +72,9 @@ export default function StudioSystem() {
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [newPin, setNewPin] = useState('');
+    const [showServiceModal, setShowServiceModal] = useState(false); // New state for service modal
+    const [newServiceName, setNewServiceName] = useState('');
+    const [editingService, setEditingService] = useState<{ id: string, name: string } | null>(null);
 
     // Inputs CRUD
     const [newEmpName, setNewEmpName] = useState('');
@@ -139,6 +141,8 @@ export default function StudioSystem() {
             ["Cortes", "Maquillaje", "Manicure", "Pedicure", "Laceados", "Tintes"].forEach(async s => await addDoc(collection(db, "services"), { name: s }));
         }
     };
+
+    const [newPin, setNewPin] = useState('');
 
     const handleUpdatePin = async () => {
         if (newPin.length < 4) return alert("El PIN debe tener al menos 4 dígitos");
@@ -552,7 +556,10 @@ export default function StudioSystem() {
                     {activeTab === 'HOME' && (
                         <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-4"><h2 className={`${playfair.className} text-2xl text-emerald-100 italic`}>Tu Equipo</h2>
-                                <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-yellow-900/20"><Plus className="w-4 h-4" /> Nuevo</button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setShowServiceModal(true)} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-emerald-100 px-5 py-2 rounded-full font-bold text-sm transition-all border border-white/10"><Settings className="w-4 h-4" /> Servicios</button>
+                                    <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-black px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-yellow-900/20"><Plus className="w-4 h-4" /> Nuevo</button>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                                 {employees.map((emp, i) => {
@@ -740,55 +747,36 @@ export default function StudioSystem() {
 
 
 
-                                    {/* Quick POS Grid */}
-                                    <p className="text-[10px] text-white/40 uppercase font-bold">Registrar Nuevo Cobro</p>
-                                    <div className="grid grid-cols-2 gap-3 max-h-[30vh] overflow-y-auto custom-scrollbar p-1">
-                                        {services.map(s => (
-                                            <button
-                                                key={s.id}
-                                                onClick={() => setSelService(s.name)}
-                                                className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-yellow-500/50 p-4 rounded-xl text-left transition-all group"
-                                            >
-                                                <span className="font-bold text-emerald-100 group-hover:text-yellow-500 transition-colors block mb-1">{s.name}</span>
-                                                <span className="text-[10px] text-white/30 uppercase tracking-widest">Cobrar</span>
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={() => {
-                                                const custom = prompt("Nombre del servicio eventual:");
-                                                if (custom) setSelService(custom);
-                                            }}
-                                            className="bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 border-dashed p-4 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2"
-                                        >
-                                            <Plus className="w-5 h-5 text-yellow-500" />
-                                            <span className="text-xs font-bold text-yellow-500">Otro</span>
-                                        </button>
-                                    </div>
+                                    <div className="space-y-4">
+                                        {/* Today's History List - Cleaned up view */}
+                                        <div className="pt-2">
+                                            <div className="flex justify-between items-center mb-4 bg-white/5 p-3 rounded-xl border border-white/5">
+                                                <p className="text-xs text-emerald-100 uppercase font-bold flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Total Generado Hoy</p>
+                                                <span className="text-xl font-mono text-yellow-500 font-bold">S/. {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0)}</span>
+                                            </div>
 
-                                    {/* Today's History List */}
-                                    <div className="border-t border-white/10 pt-4 mt-2">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <p className="text-[10px] text-white/40 uppercase font-bold">Historial de Hoy</p>
-                                            <span className="text-xs font-mono text-emerald-400 font-bold">Total: S/. {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0)}</span>
-                                        </div>
-
-                                        <div className="bg-black/20 rounded-xl border border-white/5 p-2 max-h-[25vh] overflow-y-auto custom-scrollbar space-y-1">
-                                            {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).length === 0 ? (
-                                                <p className="text-center text-xs text-white/20 py-4 italic">Sin servicios hoy.</p>
-                                            ) : (
-                                                transactions
-                                                    .filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0)))
-                                                    .sort((a, b) => b.date.getTime() - a.date.getTime())
-                                                    .map(t => (
-                                                        <div key={t.id} className="flex justify-between items-center bg-white/5 p-2 rounded-lg text-xs">
-                                                            <div>
-                                                                <p className="font-bold text-white">{t.serviceName}</p>
-                                                                <p className="text-[10px] text-white/40">{t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                            <p className="text-[10px] text-white/40 uppercase font-bold mb-2 pl-1">Detalle de Servicios</p>
+                                            <div className="bg-black/20 rounded-xl border border-white/5 p-2 max-h-[50vh] overflow-y-auto custom-scrollbar space-y-1">
+                                                {transactions.filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-10 opacity-30">
+                                                        <DollarSign className="w-12 h-12 mb-2" />
+                                                        <p className="text-sm italic">Sin cobros registrados hoy.</p>
+                                                    </div>
+                                                ) : (
+                                                    transactions
+                                                        .filter(t => t.employeeId === selectedEmp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0)))
+                                                        .sort((a, b) => b.date.getTime() - a.date.getTime())
+                                                        .map(t => (
+                                                            <div key={t.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg text-sm hover:bg-white/10 transition-colors">
+                                                                <div>
+                                                                    <p className="font-bold text-white">{t.serviceName}</p>
+                                                                    <p className="text-[10px] text-white/40 flex items-center gap-1"><Clock className="w-3 h-3" /> {t.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                                </div>
+                                                                <p className="font-mono text-emerald-300 font-bold">S/. {t.price}</p>
                                                             </div>
-                                                            <p className="font-mono text-emerald-300">S/. {t.price}</p>
-                                                        </div>
-                                                    ))
-                                            )}
+                                                        ))
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

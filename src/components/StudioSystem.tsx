@@ -653,7 +653,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                             <div className="flex flex-col items-center">
                                 <p className="text-sm text-yellow-500 font-bold mb-4 uppercase tracking-widest">Escanea para Pagar</p>
                                 <div className="w-48 h-48 bg-white p-2 rounded-xl mb-4">
-                                    <img src="/qryape.jpeg" alt="QR Yape/Plin" className="w-full h-full object-contain" onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"} />
+                                    <img src="/qryape.jpeg?v=2" alt="QR Yape/Plin" className="w-full h-full object-contain" onError={(e) => e.currentTarget.src = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MivisStudioPago"} />
                                 </div>
                                 <p className="text-xs text-white/50 mb-6 text-center">Realiza el pago y sube la captura aquí 👇</p>
 

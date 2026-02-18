@@ -27,7 +27,7 @@ const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // P
 type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; password?: string; };
 type SimpleExpense = { id: string; category: string; amount: number; description: string; date: Date; };
 type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; };
-type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending' | 'completed'; paymentMethod?: string; paymentVoucher?: string; }; // Added 'completed' status
+type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending' | 'completed'; paymentMethod?: string; paymentVoucher?: string; description?: string; }; // Added description
 type ServiceItem = { id: string; name: string; };
 
 // --- Prop Types ---
@@ -560,41 +560,66 @@ export default function StudioSystem() {
                                     const colorClass = PASTEL_COLORS[i % PASTEL_COLORS.length];
                                     return (
 
-                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }} className={`group relative ${colorClass} rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]`}>
-                                            <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="absolute top-2 right-2 p-2 text-black/20 hover:text-red-600 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"><Trash2 className="w-4 h-4" /></button>
-                                            <div className="w-24 h-24 rounded-full p-1 border-2 border-white/40 group-hover:border-white transition-colors overflow-hidden relative shadow-md">
-                                                <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full rounded-full bg-white object-cover" alt={emp.name} />
-                                            </div>
-                                            <div className="text-center">
-                                                <h3 className={`text-xl font-bold leading-none mb-1`}>{emp.name}</h3>
-                                                <p className="text-xs font-bold uppercase tracking-wider opacity-60">{emp.role}</p>
-                                            </div>
-                                            <div className="w-full mt-2 pt-4 border-t border-black/10 flex flex-col gap-2">
-                                                {/* Current Client Display */}
-                                                {(() => {
-                                                    const currentBooking = bookings
-                                                        .filter(b => b.professionalId === emp.id && b.status !== 'completed' && b.date.getDate() === new Date().getDate())
-                                                        .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
-
-                                                    if (currentBooking) {
-                                                        return (
-                                                            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 text-center mb-1 animate-in fade-in">
-                                                                <p className="text-[10px] text-yellow-600 font-bold uppercase tracking-wider mb-1">En este momento</p>
-                                                                <p className="text-sm font-bold text-yellow-500 truncate">{currentBooking.clientName}</p>
-                                                                <p className="text-[10px] text-white/50">{currentBooking.service}</p>
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })()}
-
-                                                <div className="flex justify-between items-end">
-                                                    <div>
-                                                        <p className="text-[10px] opacity-50 font-bold uppercase">Hoy</p>
-                                                        <p className="font-mono font-bold text-lg">S/. {totalToday}</p>
+                                        <motion.div layoutId={emp.id} key={emp.id} className={`group relative ${colorClass} rounded-2xl p-4 flex flex-col gap-4 shadow-lg hover:shadow-xl transition-all h-full`}>
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden shadow-md cursor-pointer" onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }}>
+                                                        <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full object-cover bg-white" alt={emp.name} />
                                                     </div>
-                                                    <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                    <div>
+                                                        <h3 className={`text-lg font-bold leading-none`}>{emp.name}</h3>
+                                                        <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">{emp.role}</p>
+                                                    </div>
                                                 </div>
+                                                <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="p-2 text-black/20 hover:text-red-600 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
+                                            </div>
+
+                                            {/* Current Client Display (Top Priority) */}
+                                            {(() => {
+                                                const currentBooking = bookings
+                                                    .filter(b => b.professionalId === emp.id && b.status !== 'completed' && b.date.getDate() === new Date().getDate())
+                                                    .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+
+                                                if (currentBooking) {
+                                                    return (
+                                                        <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-sm">
+                                                            <p className="text-[10px] text-yellow-700 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Atendiendo a</p>
+                                                            <p className="text-lg font-black text-yellow-800 leading-tight truncate">{currentBooking.clientName}</p>
+                                                            <p className="text-xs font-medium text-yellow-800/70">{currentBooking.service}</p>
+                                                            {currentBooking.description && <p className="text-[10px] italic text-yellow-800/60 mt-1">"{currentBooking.description}"</p>}
+                                                        </div>
+                                                    );
+                                                }
+                                                return <div className="bg-white/10 rounded-xl p-3 text-center border border-white/5"><p className="text-xs opacity-50 italic">Disponible</p></div>;
+                                            })()}
+
+                                            {/* POS Service Grid */}
+                                            <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[200px] border-t border-black/5 pt-2 mt-1">
+                                                <p className="text-[10px] opacity-40 font-bold uppercase mb-2 text-center">Cobro Rápido</p>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {services.map(s => (
+                                                        <button
+                                                            key={s.id}
+                                                            onClick={() => { setSelectedEmp(emp); setSelService(s.name); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }}
+                                                            className="bg-white/20 hover:bg-white/40 text-left p-2 rounded-lg text-xs font-bold transition-colors leading-tight truncate border border-transparent hover:border-black/5"
+                                                        >
+                                                            {s.name}
+                                                        </button>
+                                                    ))}
+                                                    <button onClick={() => {
+                                                        const custom = prompt("Servicio Eventual:");
+                                                        if (custom) { setSelectedEmp(emp); setSelService(custom); setIsManaging(false); }
+                                                    }}
+                                                        className="bg-black/5 hover:bg-black/10 border border-black/5 border-dashed p-2 rounded-lg text-xs font-bold text-center flex items-center justify-center text-black/40 hover:text-black/60"
+                                                    >
+                                                        <Plus className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex justify-between items-center border-t border-black/10 pt-3">
+                                                <p className="text-[10px] opacity-50 font-bold uppercase">Hoy: <span className="font-mono text-sm ml-1">S/. {totalToday}</span></p>
+                                                <button onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); }} className="text-[10px] underline opacity-50 hover:opacity-100">Ver Detalles</button>
                                             </div>
                                         </motion.div>
                                     );
@@ -873,13 +898,14 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
     const [bDate, setBDate] = useState('');
     const [bTime, setBTime] = useState('');
     const [bProf, setBProf] = useState('');
+    const [bDesc, setBDesc] = useState('');
 
     const handleSubmit = () => {
         if (!cName || !bService || !bDate || !bTime) return alert("Completa todos los campos");
 
         const dateObj = new Date(bDate + 'T' + bTime);
-        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: bProf || 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null });
-        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setBProf('');
+        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: bProf || 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null, description: bDesc });
+        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setBProf(''); setBDesc('');
     };
 
     return (
@@ -902,16 +928,27 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             </div>
 
             {!isClient && (
-                <div>
-                    <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Asignar Profesional (Opcional)</label>
-                    <div className="relative">
-                        <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
-                            <option value="">Ninguno (Pendiente)</option>
-                            {employees.map((emp: Employee) => <option key={emp.id} value={emp.id} className="bg-neutral-900">{emp.name}</option>)}
-                        </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
+                <>
+                    <div>
+                        <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Asignar Profesional (Opcional)</label>
+                        <div className="relative">
+                            <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
+                                <option value="">Ninguno (Pendiente)</option>
+                                {employees.map((emp: Employee) => <option key={emp.id} value={emp.id} className="bg-neutral-900">{emp.name}</option>)}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
+                        </div>
                     </div>
-                </div>
+                    <div>
+                        <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Notas / Descripción (Opcional)</label>
+                        <textarea
+                            placeholder="Detalles adicionales, alergias, preferencias..."
+                            className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl min-h-[100px] resize-none"
+                            value={bDesc}
+                            onChange={e => setBDesc(e.target.value)}
+                        />
+                    </div>
+                </>
             )}
 
             <div className="grid grid-cols-2 gap-4">

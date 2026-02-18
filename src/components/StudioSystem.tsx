@@ -34,7 +34,7 @@ type ServiceItem = { id: string; name: string; };
 type BookingFormProps = { employees: Employee[]; services: ServiceItem[]; onSubmit: (data: any) => void; isClient: boolean; };
 type FinanceSectionProps = { transactions: Transaction[]; expenses: SimpleExpense[]; onAdd: (data: any) => void; onDelete: (id: string) => void; onReset: () => void; };
 type ReportSectionProps = { employees: Employee[]; transactions: Transaction[]; onUpdateComm: (id: string, val: string) => void; };
-type BookingSectionProps = { bookings: Booking[]; employees: Employee[]; services: ServiceItem[]; onAdd: (data: any) => void; onDelete: (id: string) => void; onSelect: (b: Booking) => void; };
+type BookingSectionProps = { bookings: Booking[]; employees: Employee[]; services: ServiceItem[]; onAdd: (data: any) => void; onDelete: (id: string) => void; onSelect: (b: Booking) => void; onAssign: (bId: string, pId: string) => void; };
 
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
 const PAY_METHODS = ["YAPE", "PLIN"];
@@ -367,7 +367,7 @@ export default function StudioSystem() {
 
                 <AnimatePresence mode='wait'>
                     {activeTab === 'BOOKINGS' && (
-                        <BookingSection bookings={bookings} employees={employees} services={services} onAdd={handleBooking} onDelete={handleDeleteBooking} onSelect={setSelectedBooking} />
+                        <BookingSection bookings={bookings} employees={employees} services={services} onAdd={handleBooking} onDelete={handleDeleteBooking} onSelect={setSelectedBooking} onAssign={handleProfessionalAssign} />
                     )}
 
                     {activeTab === 'FINANCE' && (
@@ -485,8 +485,45 @@ export default function StudioSystem() {
                     {selectedEmp && (
                         <Modal onClose={() => setSelectedEmp(null)}>
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10"><div className="flex items-center gap-3"><img src={selectedEmp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedEmp.avatarSeed}`} className="w-12 h-12 object-cover rounded-full bg-[#1a3830]" /><div><h3 className={`${playfair.className} text-xl text-white`}>{selectedEmp.name}</h3></div></div><button onClick={() => setIsManaging(!isManaging)} className="p-2 text-emerald-400 hover:bg-white/5 rounded-full"><Settings className="w-5 h-5" /></button></div>
+
                             {!selService || isManaging ? (
-                                <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar">{isManaging && <div className="flex gap-2 mb-4"><input type="text" className="input-modern flex-1 text-sm py-2" placeholder="Nuevo Servicio..." value={newServName} onChange={e => setNewServName(e.target.value)} /><button onClick={handleCreateService} className="btn-primary px-4 py-2 text-xs">OK</button></div>}{services.map(s => <button key={s.id} onClick={() => !isManaging && setSelService(s.name)} className={`w-full text-left p-4 rounded-xl border flex justify-between items-center transition-all ${isManaging ? 'border-dashed border-white/20 text-white/50' : 'bg-white/5 border-white/5 hover:border-yellow-500 hover:bg-white/10 text-emerald-100'}`}>{s.name}{isManaging && <span onClick={(e) => { e.stopPropagation(); handleDeleteService(s.id) }} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></span>}</button>)}</div>
+                                <div className="space-y-4">
+                                    {/* Clientes en Espera - Asignación Rápida */}
+                                    {!isManaging && (
+                                        <div className="mb-4">
+                                            <p className="text-[10px] text-white/40 uppercase font-bold mb-2">Clientes en Espera (Hoy)</p>
+                                            <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                                                {bookings.filter(b => b.date.getDate() === new Date().getDate() && (!b.professionalId || b.professionalId === 'pending')).length === 0 ? (
+                                                    <span className="text-xs text-white/20 italic">No hay clientes esperando.</span>
+                                                ) : (
+                                                    bookings.filter(b => b.date.getDate() === new Date().getDate() && (!b.professionalId || b.professionalId === 'pending')).map(b => (
+                                                        <button
+                                                            key={b.id}
+                                                            onClick={async () => {
+                                                                // Asignar y Cargar
+                                                                if (confirm(`¿Asignar ${b.clientName} a ${selectedEmp.name}?`)) {
+                                                                    await updateDoc(doc(db, "bookings", b.id), { professionalId: selectedEmp.id });
+                                                                    setSelService(b.service);
+                                                                    // Intentar adivinar precio (opcional, si existiera en un mapa de precios)
+                                                                }
+                                                            }}
+                                                            className="flex flex-col items-start bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-3 min-w-[140px] transition-all"
+                                                        >
+                                                            <span className="font-bold text-yellow-500 text-sm truncate w-full">{b.clientName}</span>
+                                                            <span className="text-[10px] text-white/60 truncate w-full">{b.service}</span>
+                                                            <span className="text-[10px] text-white/40">{b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="max-h-[40vh] overflow-y-auto custom-scrollbar space-y-2">
+                                        {isManaging && <div className="flex gap-2 mb-4"><input type="text" className="input-modern flex-1 text-sm py-2" placeholder="Nuevo Servicio..." value={newServName} onChange={e => setNewServName(e.target.value)} /><button onClick={handleCreateService} className="btn-primary px-4 py-2 text-xs">OK</button></div>}
+                                        {services.map(s => <button key={s.id} onClick={() => !isManaging && setSelService(s.name)} className={`w-full text-left p-4 rounded-xl border flex justify-between items-center transition-all ${isManaging ? 'border-dashed border-white/20 text-white/50' : 'bg-white/5 border-white/5 hover:border-yellow-500 hover:bg-white/10 text-emerald-100'}`}>{s.name}{isManaging && <span onClick={(e) => { e.stopPropagation(); handleDeleteService(s.id) }} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></span>}</button>)}
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="flex flex-col items-center animate-in fade-in zoom-in-95">
                                     <button onClick={() => setSelService(null)} className="self-start text-xs text-emerald-400 mb-8 hover:underline">← Volver</button>
@@ -556,9 +593,16 @@ export default function StudioSystem() {
     );
 }
 
+const handleProfessionalAssign = async (bookingId: string, professionalId: string) => {
+    if (!professionalId) return;
+    await updateDoc(doc(db, "bookings", bookingId), { professionalId });
+};
+
+// ... (Rest of existing code)
+
 // --- SUB-COMPONENTES AUXILIARES ---
 // (BookingSection, BookingForm, FinanceSection, etc. se mantienen igual pero integrados en el dashboard)
-function BookingSection({ bookings, employees, services, onAdd, onDelete, onSelect }: BookingSectionProps) {
+function BookingSection({ bookings, employees, services, onAdd, onDelete, onSelect, onAssign }: BookingSectionProps) {
     const sortedBookings = [...bookings].sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
     return (
         <div className="grid md:grid-cols-2 gap-8 animate-in fade-in">
@@ -578,19 +622,43 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
                             const emp = employees.find((e: Employee) => e.id === b.professionalId);
                             // Alert Logic: Show red dot if appointment is within 15 minutes
                             const isSoon = new Date().getTime() > b.date.getTime() - 900000 && new Date().getTime() < b.date.getTime();
+                            const isAssigned = b.professionalId && b.professionalId !== 'pending';
 
                             return (
-                                <div key={b.id} onClick={() => onSelect(b)} className={`bg-white/5 border-l-4 p-4 rounded-r-xl flex justify-between items-center group cursor-pointer hover:bg-white/10 transition-colors ${isSoon ? 'border-l-red-500 bg-red-500/5' : 'border-l-yellow-600'}`}>
-                                    <div>
-                                        <h4 className="font-bold text-white flex items-center gap-2">
-                                            {b.clientName}
-                                            {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
-                                            {b.paymentVoucher && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30">Pago 📎</span>}
-                                        </h4>
-                                        <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                        <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span></div>
+                                <div key={b.id} className={`bg-white/5 border-l-4 p-4 rounded-r-xl group hover:bg-white/10 transition-colors ${isSoon ? 'border-l-red-500 bg-red-500/5' : isAssigned ? 'border-l-emerald-500 bg-emerald-900/10' : 'border-l-yellow-600'}`}>
+                                    <div className="flex justify-between items-start mb-2" onClick={() => onSelect(b)}>
+                                        <div>
+                                            <h4 className="font-bold text-white flex items-center gap-2">
+                                                {b.clientName}
+                                                {isSoon && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
+                                                {b.paymentVoucher && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30">Pago 📎</span>}
+                                                {isAssigned && <span className="text-[10px] bg-emerald-500 text-black px-2 rounded-full font-bold animate-pulse">EN ATENCIÓN ⚡</span>}
+                                            </h4>
+                                            <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1"><Clock className="w-3 h-3" /> {b.date.toLocaleDateString()} - {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                            <div className="text-[10px] text-white/40 mt-1 flex gap-2"><span>{b.service}</span></div>
+                                        </div>
                                     </div>
-                                    <div className="text-white/20 group-hover:text-yellow-500 transition-colors"><ChevronRight className="w-5 h-5" /></div>
+
+                                    <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                                        {!isAssigned ? (
+                                            <select
+                                                className="bg-black/40 text-xs text-white/70 border border-white/10 rounded-lg p-2 w-full outline-none focus:border-yellow-500"
+                                                onChange={(e) => onAssign(b.id, e.target.value)}
+                                                defaultValue=""
+                                            >
+                                                <option value="" disabled>⚠️ Asignar Profesional...</option>
+                                                {employees.map(e => (
+                                                    <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg w-full border border-emerald-500/20">
+                                                <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold">{emp?.avatarSeed?.charAt(0)}</div>
+                                                <span className="font-bold">Atendido por: {emp?.name || 'Desconocido'}</span>
+                                            </div>
+                                        )}
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(b.id); }} className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
                                 </div>
                             );
                         })}
@@ -605,31 +673,15 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
     const [cName, setCName] = useState('');
     const [cPhone, setCPhone] = useState('');
     const [bService, setBService] = useState('');
-    const [professionalId, setProfessionalId] = useState('');
     const [bDate, setBDate] = useState('');
     const [bTime, setBTime] = useState('');
-
-    const handleEmployeeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const empId = e.target.value;
-        setProfessionalId(empId);
-
-        // Auto-select service based on employee role
-        const emp = employees.find(em => em.id === empId);
-        if (emp) {
-            // Simple heuristic: if a service name contains the role or vice-versa
-            const matchingService = services.find(s => s.name.toLowerCase().includes(emp.role.toLowerCase()) || emp.role.toLowerCase().includes(s.name.toLowerCase()));
-            if (matchingService) {
-                setBService(matchingService.name);
-            }
-        }
-    };
 
     const handleSubmit = () => {
         if (!cName || !bService || !bDate || !bTime) return alert("Completa todos los campos");
 
         const dateObj = new Date(bDate + 'T' + bTime);
-        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: professionalId || 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null });
-        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService(''); setProfessionalId('');
+        onSubmit({ clientName: cName, clientPhone: cPhone, service: bService, professionalId: 'pending', date: dateObj, paymentMethod: 'MANUAL', paymentVoucher: null });
+        setCName(''); setCPhone(''); setBDate(''); setBTime(''); setBService('');
     };
 
     return (
@@ -640,17 +692,6 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                     <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
                     <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
                     <p className="text-yellow-500 font-bold text-xs uppercase tracking-wide mt-2 ml-1">⚠️ LA CITA SE RESERVA CON EL 50% DEL SERVICIO</p>
-                </div>
-            </div>
-
-            <div>
-                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Profesional (Opcional)</label>
-                <div className="relative">
-                    <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={professionalId} onChange={handleEmployeeChange}>
-                        <option value="">Cualquiera...</option>
-                        {employees.map((e: Employee) => <option key={e.id} value={e.id} className="bg-neutral-900">{e.name} ({e.role})</option>)}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                 </div>
             </div>
 

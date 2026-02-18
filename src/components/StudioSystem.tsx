@@ -138,11 +138,13 @@ export default function StudioSystem() {
                 if (isFifteenMinutes && b.status !== 'completed' && !alertedBookings.has(b.id)) {
                     // console.log("Triggering alert for:", b.clientName);
 
-                    // Create utterance
-                    const message = `Hora límite de cita de ${b.clientName || 'Cliente'}, por favor confirmar cita.`;
+                    // Create utterance (Volume boosted)
+                    const message = `¡Atención! Hora límite de cita de ${b.clientName || 'Cliente'}, por favor confirmar cita.`;
                     const utterance = new SpeechSynthesisUtterance(message);
                     utterance.lang = 'es-ES'; // Spanish
-                    utterance.rate = 0.9; // Slightly slower for clarity
+                    utterance.rate = 1.0; // Faster/Normal rate for more impact
+                    utterance.pitch = 1.1; // Higher pitch to cut through noise
+                    utterance.volume = 1.0; // MAX Volume (0 to 1)
 
                     // Speak
                     window.speechSynthesis.speak(utterance);

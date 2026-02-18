@@ -63,9 +63,14 @@ export default function StudioSystem() {
     const [newEmpPhoto, setNewEmpPhoto] = useState<string | null>(null);
     const [selService, setSelService] = useState<string | null>(null);
     const [manPrice, setManPrice] = useState('');
-    const [transPayment, setTransPayment] = useState(PAY_METHODS[0]); // New state for transaction payment
+    const [transPayment, setTransPayment] = useState(PAY_METHODS[0]);
     const [isManaging, setIsManaging] = useState(false);
     const [newServName, setNewServName] = useState('');
+
+    // Split Payment State
+    const [isSplit, setIsSplit] = useState(false);
+    const [splitParts, setSplitParts] = useState<{ method: string, amount: number }[]>([]);
+    const [splitAmount, setSplitAmount] = useState('');
 
     // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE (Optimized)
     useEffect(() => {
@@ -158,19 +163,51 @@ export default function StudioSystem() {
 
     const handleDeleteService = async (id: string) => await deleteDoc(doc(db, "services", id));
     const handleTransaction = async () => {
-        const p = parseFloat(manPrice);
-        if (!selectedEmp || isNaN(p) || p <= 0) return;
-        await addDoc(collection(db, "transactions"), {
-            employeeId: selectedEmp.id,
-            serviceName: selService,
-            price: p,
-            date: new Date(),
-            paymentMethod: transPayment // Save Payment Method
-        });
+        const totalP = parseFloat(manPrice);
+        if (!selectedEmp || isNaN(totalP) || totalP <= 0) return;
+
+        if (isSplit) {
+            const currentTotal = splitParts.reduce((s, p) => s + p.amount, 0);
+            if (Math.abs(currentTotal - totalP) > 0.1) return alert(`Los montos no coinciden. Faltan S/. ${(totalP - currentTotal).toFixed(2)}`);
+
+            for (const part of splitParts) {
+                await addDoc(collection(db, "transactions"), {
+                    employeeId: selectedEmp.id,
+                    serviceName: `${selService} (Part. ${part.method})`,
+                    price: part.amount,
+                    date: new Date(),
+                    paymentMethod: part.method
+                });
+            }
+        } else {
+            await addDoc(collection(db, "transactions"), {
+                employeeId: selectedEmp.id,
+                serviceName: selService,
+                price: totalP,
+                date: new Date(),
+                paymentMethod: transPayment
+            });
+        }
+
         setSelService(null);
         setManPrice('');
-        setTransPayment(PAY_METHODS[0]); // Reset
+        setTransPayment(PAY_METHODS[0]);
+        setIsSplit(false);
+        setSplitParts([]);
         alert('Cobro registrado ☁️');
+    };
+
+    const addSplitPart = (method: string) => {
+        const val = parseFloat(splitAmount);
+        if (!val || val <= 0) return;
+        setSplitParts([...splitParts, { method, amount: val }]);
+        setSplitAmount('');
+    };
+
+    const removeSplitPart = (index: number) => {
+        const n = [...splitParts];
+        n.splice(index, 1);
+        setSplitParts(n);
     };
     const handleUpdateCommission = async (id: string, val: string) => await updateDoc(doc(db, "employees", id), { commission: val });
     const handleDeleteBooking = async (id: string) => { if (confirm("¿Cancelar cita?")) await deleteDoc(doc(db, "bookings", id)); };
@@ -319,7 +356,8 @@ export default function StudioSystem() {
                                 {employees.map(emp => {
                                     const totalToday = transactions.filter(t => t.employeeId === emp.id && t.date >= new Date(new Date().setHours(0, 0, 0, 0))).reduce((s, t) => s + t.price, 0);
                                     return (
-                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); }} className="group relative bg-white/5 border border-white/10 hover:border-yellow-500/50 rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all hover:bg-white/10">
+
+                                        <motion.div layoutId={emp.id} key={emp.id} onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }} className="group relative bg-white/5 border border-white/10 hover:border-yellow-500/50 rounded-2xl p-6 flex flex-col items-center gap-4 cursor-pointer backdrop-blur-sm transition-all hover:bg-white/10">
                                             <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="absolute top-2 right-2 p-2 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all z-10"><Trash2 className="w-4 h-4" /></button>
                                             <div className="w-24 h-24 rounded-full p-1 border border-emerald-500/30 group-hover:border-yellow-500 transition-colors overflow-hidden relative"><img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full rounded-full bg-[#1a3830] object-cover" alt={emp.name} /></div>
                                             <div className="text-center"><h3 className={`text-xl text-emerald-50 ${playfair.className}`}>{emp.name}</h3><p className="text-xs text-emerald-400 font-bold uppercase tracking-wider mt-1">{emp.role}</p></div>
@@ -412,17 +450,55 @@ export default function StudioSystem() {
                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-2xl text-white/30 font-serif">S/.</span>
                                         <input autoFocus type="number" placeholder="0" className="w-full bg-transparent text-center text-5xl font-playfair text-white border-b-2 border-white/20 focus:border-yellow-500 outline-none pb-2" value={manPrice} onChange={e => setManPrice(e.target.value)} />
                                     </div>
-                                    <div className="w-full mb-6">
-                                        <label className="text-xs text-white/40 uppercase font-bold block mb-2 text-center">Método de Pago</label>
-                                        <div className="flex gap-2 justify-center flex-wrap">
-                                            {PAY_METHODS.map(pm => (
-                                                <button key={pm} onClick={() => setTransPayment(pm)} className={`px-3 py-1 rounded-full text-xs font-bold border ${transPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
-                                                    {pm}
-                                                </button>
-                                            ))}
+                                    <div className="w-full mb-6 relative">
+                                        <div className="flex justify-center mb-4">
+                                            <button onClick={() => { setIsSplit(!isSplit); setSplitParts([]); }} className={`text-xs px-3 py-1 rounded-full border transition-all ${isSplit ? 'bg-yellow-500 text-black border-yellow-500 font-bold' : 'text-white/40 border-white/20 hover:border-white'}`}>
+                                                🔀 Dividir Pago {isSplit && '(Activado)'}
+                                            </button>
                                         </div>
+
+                                        {isSplit ? (
+                                            <div className="bg-black/20 p-4 rounded-xl border border-white/10 animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex justify-between text-xs text-white/50 mb-2 font-bold uppercase">
+                                                    <span>Monto Total: S/. {manPrice || 0}</span>
+                                                    <span className={`${(parseFloat(manPrice || '0') - splitParts.reduce((s, p) => s + p.amount, 0)) === 0 ? 'text-emerald-400' : 'text-red-400'}`}>Restante: S/. {(parseFloat(manPrice || '0') - splitParts.reduce((s, p) => s + p.amount, 0)).toFixed(2)}</span>
+                                                </div>
+
+                                                <div className="space-y-2 mb-4">
+                                                    {splitParts.map((p, i) => (
+                                                        <div key={i} className="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg text-sm">
+                                                            <span>{p.method}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono">S/. {p.amount}</span>
+                                                                <button onClick={() => removeSplitPart(i)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="flex gap-2 mb-2">
+                                                    <input type="number" placeholder="Monto Parcial" className="input-modern w-24 text-center py-1 text-sm font-mono" value={splitAmount} onChange={e => setSplitAmount(e.target.value)} />
+                                                    <div className="flex-1 flex gap-1 overflow-x-auto custom-scrollbar pb-1">
+                                                        {PAY_METHODS.map(pm => (
+                                                            <button key={pm} onClick={() => addSplitPart(pm)} className="bg-emerald-900/40 border border-emerald-500/20 text-emerald-100 text-[10px] px-2 rounded hover:bg-emerald-500 hover:text-black whitespace-nowrap transition-colors">{pm}</button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <label className="text-xs text-white/40 uppercase font-bold block mb-2 text-center">Método de Pago</label>
+                                                <div className="flex gap-2 justify-center flex-wrap">
+                                                    {PAY_METHODS.map(pm => (
+                                                        <button key={pm} onClick={() => setTransPayment(pm)} className={`px-3 py-1 rounded-full text-xs font-bold border ${transPayment === pm ? 'bg-yellow-500 text-black border-yellow-500' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
+                                                            {pm}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                    <button onClick={handleTransaction} className="btn-primary w-full py-4 flex justify-center gap-2">
+                                    <button onClick={handleTransaction} disabled={isSplit && Math.abs(parseFloat(manPrice || '0') - splitParts.reduce((s, p) => s + p.amount, 0)) > 0.1} className="btn-primary w-full py-4 flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                         <DollarSign className="w-5 h-5" /> Cobrar
                                     </button>
                                 </div>

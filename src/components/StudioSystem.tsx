@@ -39,6 +39,16 @@ type BookingSectionProps = { bookings: Booking[]; employees: Employee[]; service
 const EXPENSE_CATS = ["Pago Personal", "Luz", "Agua", "Internet", "Local", "Insumos", "Otros"];
 const PAY_METHODS = ["YAPE", "PLIN"];
 const ADMIN_PAY_METHODS = ["EFECTIVO", "YAPE", "PLIN", "POS", "TARJETA"];
+const PASTEL_COLORS = [
+    "bg-rose-200 text-rose-900 border-rose-300",
+    "bg-blue-200 text-blue-900 border-blue-300",
+    "bg-green-200 text-green-900 border-green-300",
+    "bg-purple-200 text-purple-900 border-purple-300",
+    "bg-orange-200 text-orange-900 border-orange-300",
+    "bg-teal-200 text-teal-900 border-teal-300",
+    "bg-indigo-200 text-indigo-900 border-indigo-300",
+    "bg-pink-200 text-pink-900 border-pink-300",
+];
 
 export default function StudioSystem() {
     // Datos
@@ -50,13 +60,14 @@ export default function StudioSystem() {
     const [adminPin, setAdminPin] = useState("1234"); // Default PIN
 
     // UI State
-    const [view, setView] = useState<'LANDING' | 'PIN_ENTRY' | 'ADMIN_DASHBOARD' | 'CLIENT_BOOKING'>('LANDING');
+    const [view, setView] = useState<'LANDING' | 'PIN_ENTRY' | 'ADMIN_DASHBOARD' | 'CLIENT_BOOKING' | 'WORKER_SELECT' | 'WORKER_DASHBOARD'>('LANDING');
     const [activeTab, setActiveTab] = useState<'HOME' | 'FINANCE' | 'REPORTS' | 'BOOKINGS'>('HOME'); // Sub-tabs for Admin
     const [pinInput, setPinInput] = useState("");
     const [pinError, setPinError] = useState(false);
     const [isOffline, setIsOffline] = useState(false); // New Offline State
 
     // Admin Actions State
+    const [currentWorker, setCurrentWorker] = useState<Employee | null>(null);
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -265,14 +276,125 @@ export default function StudioSystem() {
                         <p className="text-emerald-200/80 tracking-[0.4em] text-sm uppercase">Studio & Beauty</p>
                     </div>
 
-                    <div className="space-y-4">
-                        <button onClick={() => setView('PIN_ENTRY')} className="w-full bg-white text-[#061814] hover:bg-emerald-100 py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(255,255,255,0.1)] transition-all flex items-center justify-center gap-3">
-                            <Lock className="w-5 h-5" /> Ingresar al Sistema
+                    <div className="flex gap-4">
+                        <button onClick={() => setView('WORKER_SELECT')} className="flex-1 bg-white/10 hover:bg-white/20 text-white py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 border border-white/5 backdrop-blur-md">
+                            <Users className="w-5 h-5" /> Soy Equipo
+                        </button>
+                        <button onClick={() => setView('PIN_ENTRY')} className="flex-1 bg-white/10 hover:bg-white/20 text-white py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 border border-white/5 backdrop-blur-md">
+                            <Lock className="w-5 h-5" /> Admin
                         </button>
                     </div>
                 </div>
             </div>
         )
+    }
+
+    // 2. WORKER SELECT
+    if (view === 'WORKER_SELECT') {
+        return (
+            <div className="min-h-screen bg-[#0f2a24] p-6 flex flex-col items-center justify-center">
+                <button onClick={() => setView('LANDING')} className="absolute top-6 left-6 text-white/50 hover:text-white flex items-center gap-2"><div className="p-2 bg-white/5 rounded-full"><ChevronRight className="w-5 h-5 rotate-180" /></div> Regresar</button>
+                <h2 className={`${playfair.className} text-4xl text-white mb-2 text-center`}>¿Quién eres?</h2>
+                <p className="text-white/40 mb-10 text-center">Selecciona tu perfil para ingresar</p>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full max-w-2xl">
+                    {employees.map((emp, i) => {
+                        const colorClass = PASTEL_COLORS[i % PASTEL_COLORS.length];
+                        return (
+                            <motion.button
+                                key={emp.id}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => { setCurrentWorker(emp); setView('WORKER_DASHBOARD'); }}
+                                className={`${colorClass} p-6 rounded-2xl flex flex-col items-center gap-4 border-2 transition-all shadow-lg`}
+                            >
+                                <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 shadow-md">
+                                    <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full object-cover bg-white" alt={emp.name} />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className={`font-bold text-lg leading-tight uppercase`}>{emp.name}</h3>
+                                    <p className="text-xs opacity-70 mt-1">{emp.role}</p>
+                                </div>
+                            </motion.button>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+
+    // 3. WORKER DASHBOARD
+    if (view === 'WORKER_DASHBOARD' && currentWorker) {
+        const myBookings = bookings.filter(b => b.professionalId === currentWorker.id && b.status === 'confirmed'); // Assuming 'confirmed' is active. 'finished' would be done.
+
+        return (
+            <div className="min-h-screen bg-[#0f2a24] p-6">
+                <header className="flex justify-between items-center mb-8 max-w-xl mx-auto">
+                    <div className="flex items-center gap-3">
+                        <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-12 h-12 rounded-full border border-white/20 bg-white" />
+                        <div>
+                            <h1 className={`${playfair.className} text-xl text-white`}>Hola, {currentWorker.name} ✨</h1>
+                            <p className="text-xs text-emerald-400">Tu Espacio de Trabajo</p>
+                        </div>
+                    </div>
+                    <button onClick={() => { setView('WORKER_SELECT'); setCurrentWorker(null); }} className="p-2 bg-white/5 rounded-full text-white/50 hover:text-white"><LogOut className="w-5 h-5" /></button>
+                </header>
+
+                <main className="max-w-xl mx-auto space-y-6">
+                    <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                        <h2 className="text-white font-bold mb-6 flex items-center gap-2"><Users className="w-5 h-5 text-yellow-500" /> Tus Clientes Asignados</h2>
+
+                        {myBookings.length === 0 ? (
+                            <div className="text-center py-10">
+                                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">💤</div>
+                                <p className="text-white/30">Todo tranquilo por ahora.</p>
+                                <p className="text-xs text-white/20 mt-1">Espera a que te asignen un cliente.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {myBookings.map(b => (
+                                    <div key={b.id} className="bg-black/20 border border-white/5 p-5 rounded-2xl flex flex-col gap-4">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-white">{b.clientName}</h3>
+                                                <p className="text-emerald-400 text-sm font-medium">{b.service}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="bg-yellow-500/20 text-yellow-500 text-[10px] px-2 py-1 rounded-full border border-yellow-500/20 font-bold uppercase">En Proceso</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 text-xs text-white/40 border-t border-white/5 pt-3 mt-1">
+                                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {b.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {b.date.toLocaleDateString()}</span>
+                                        </div>
+
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm(`¿Terminaste con ${b.clientName}?`)) {
+                                                    // Mark as done? Or delete from pending? 
+                                                    // For now, let's update status to 'finished' so it disappears from this list but stays in admin history/payment queue if we had one. 
+                                                    // Wait, transactions are usually created by payment. 
+                                                    // The user said: "den el termino de su servicio".
+                                                    // Let's assume we just delete it from active bookings or mark it done. 
+                                                    // Admin flow usually deletes booking when paid. 
+                                                    // I'll update status to 'finished' and maybe Admin sees it differently? 
+                                                    // For now, let's keep it simple: Just mark status 'completed'.
+                                                    await updateDoc(doc(db, "bookings", b.id), { status: 'completed' });
+                                                }
+                                            }}
+                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all mt-2"
+                                        >
+                                            <CheckCircle2 className="w-5 h-5" /> Terminar Servicio
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </main>
+            </div>
+        );
     }
 
     // 2. PIN ENTRY (ADMIN LOGIN)
@@ -520,8 +642,7 @@ export default function StudioSystem() {
                                     )}
 
                                     <div className="max-h-[40vh] overflow-y-auto custom-scrollbar space-y-2">
-                                        {isManaging && <div className="flex gap-2 mb-4"><input type="text" className="input-modern flex-1 text-sm py-2" placeholder="Nuevo Servicio..." value={newServName} onChange={e => setNewServName(e.target.value)} /><button onClick={handleCreateService} className="btn-primary px-4 py-2 text-xs">OK</button></div>}
-                                        {services.map(s => <button key={s.id} onClick={() => !isManaging && setSelService(s.name)} className={`w-full text-left p-4 rounded-xl border flex justify-between items-center transition-all ${isManaging ? 'border-dashed border-white/20 text-white/50' : 'bg-white/5 border-white/5 hover:border-yellow-500 hover:bg-white/10 text-emerald-100'}`}>{s.name}{isManaging && <span onClick={(e) => { e.stopPropagation(); handleDeleteService(s.id) }} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></span>}</button>)}
+                                        <p className="text-xs text-white/20 text-center italic mt-4">Selecciona un cliente en espera para atenderlo.</p>
                                     </div>
                                 </div>
                             ) : (

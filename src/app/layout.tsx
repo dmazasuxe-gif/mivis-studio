@@ -38,6 +38,11 @@ export const metadata: Metadata = {
     description: "Expertos en belleza y cuidado personal. Reserva tu cita online.",
   },
   category: 'beauty',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({

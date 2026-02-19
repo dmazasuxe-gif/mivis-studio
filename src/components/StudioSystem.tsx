@@ -117,6 +117,8 @@ export default function StudioSystem() {
 
     // Voice Alert State
     const [alertedBookings, setAlertedBookings] = useState<Set<string>>(new Set());
+    // Ref to track completed bookings for Admin voice alert
+    const completedBookingsRef = useRef<Set<string>>(new Set());
 
     // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE (Optimized)
     useEffect(() => {
@@ -193,6 +195,50 @@ export default function StudioSystem() {
         const interval = setInterval(checkAlerts, 10000); // Check every 10 seconds
         return () => clearInterval(interval);
     }, [bookings, alertedBookings]);
+
+    // 🔔 ADMIN VOICE ALERT: When Worker Finishes Service (Status -> completed)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        bookings.forEach(b => {
+            if (b.status === 'completed' && !completedBookingsRef.current.has(b.id)) {
+                // Determine if this is a "recent" completion we should announce.
+                // Simple heuristic: If it's loaded from DB as completed initially, we might not want to announce it 
+                // unless we are sure it just happened. 
+                // However, since this runs on snapshot updates, we can assume if it wasn't in our Ref, it's new *to this session*.
+                // To avoid announcing ALL completed bookings on page load, we can populate the ref initially silently.
+                // BUT, to keep it simple as requested: We'll announce it if the component has been mounted for a moment?
+                // Better: The User specifically asked for "when a worker clicks finish". 
+                // Since we are detecting the STATE CHANGE here, this runs on the Admin's machine when the DB updates.
+
+                // Hack: On initial load (bookings change from [] to [...data]), we might get a bunch of completed ones.
+                // We should only announce if we have seen the 'pending/confirmed' state before? 
+                // Or simply: just announce it. But to avoid annoyance on refresh, strictly we need a timestamp.
+                // Let's rely on the fact that `completedBookingsRef` starts empty, so on first load it adds all.
+                // We should SKIP the alert if it's the *initial* load.
+                // We can check if `completedBookingsRef.current.size === 0` and bookings.length > 0 -> Just populate, don't speak?
+                // Let's try: Populate ref silently first time.
+
+                if (completedBookingsRef.current.size === 0 && bookings.length > 0) {
+                    // Initial population - DO NOT SPEAK
+                    bookings.filter(bk => bk.status === 'completed').forEach(bk => completedBookingsRef.current.add(bk.id));
+                } else {
+                    // Real update
+                    const workerName = employees.find(e => e.id === b.professionalId)?.name || 'El profesional';
+                    const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${workerName} ahora está libre para el siguiente cliente.`);
+                    utterance.lang = 'es-ES';
+                    utterance.rate = 1.0;
+                    window.speechSynthesis.speak(utterance);
+
+                    completedBookingsRef.current.add(b.id);
+                }
+            }
+        });
+
+        // Ensure ref keeps up with all completed ones to prevent re-triggering
+        bookings.filter(b => b.status === 'completed').forEach(b => completedBookingsRef.current.add(b.id));
+
+    }, [bookings, employees]);
 
     // --- LOGIC ---
 
@@ -606,7 +652,7 @@ export default function StudioSystem() {
                                                 onClick={async () => {
                                                     if (!b.isPaid) return;
                                                     if (confirm(`¿Terminaste con ${b.clientName}?`)) {
-                                                        const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${currentWorker.name} ahora está libre para el siguiente cliente.`);
+                                                        const utterance = new SpeechSynthesisUtterance(`Servicio cobrado, gracias por tu trabajo.`);
                                                         utterance.lang = 'es-ES';
                                                         window.speechSynthesis.speak(utterance);
                                                         await updateDoc(doc(db, "bookings", b.id), { status: 'completed' });
@@ -968,33 +1014,37 @@ export default function StudioSystem() {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="space-y-2 mb-6 bg-white/5 p-4 rounded-xl border border-white/10">
-                                    {ADMIN_PAY_METHODS.map(pm => {
-                                        const currentVal = posSplitDetails.find(d => d.method === pm)?.amount || '';
-                                        return (
-                                            <div key={pm} className="flex justify-between items-center">
-                                                <span className="text-xs font-bold text-white/60 w-24">{pm}</span>
-                                                <div className="flex items-center gap-2 flex-1 bg-black/30 rounded-lg px-3 border border-white/5">
-                                                    <span className="text-yellow-500 text-xs">S/.</span>
-                                                    <input
-                                                        type="number"
-                                                        className="bg-transparent w-full py-2 text-right text-sm font-mono focus:outline-none"
-                                                        placeholder="0.00"
-                                                        value={currentVal}
-                                                        onChange={(e) => {
-                                                            const val = parseFloat(e.target.value) || 0;
-                                                            const others = posSplitDetails.filter(d => d.method !== pm);
-                                                            if (val > 0) others.push({ method: pm, amount: val });
-                                                            setPosSplitDetails(others);
-                                                        }}
-                                                    />
+
+                                <div className="space-y-1 mb-4 bg-white/5 p-3 rounded-xl border border-white/10 overflow-y-auto max-h-[150px] custom-scrollbar">
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {ADMIN_PAY_METHODS.map(pm => {
+                                            const currentVal = posSplitDetails.find(d => d.method === pm)?.amount || '';
+                                            return (
+                                                <div key={pm} className="flex justify-between items-center bg-black/20 p-2 rounded-lg">
+                                                    <span className="text-[10px] font-bold text-white/60 w-20">{pm}</span>
+                                                    <div className="flex items-center gap-1 flex-1 bg-black/30 rounded px-2 border border-white/5">
+                                                        <span className="text-yellow-500 text-[10px]">S/.</span>
+                                                        <input
+                                                            type="number"
+                                                            className="bg-transparent w-full py-1 text-right text-xs font-mono focus:outline-none"
+                                                            placeholder="0.00"
+                                                            value={currentVal}
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value) || 0;
+                                                                const others = posSplitDetails.filter(d => d.method !== pm);
+                                                                if (val > 0) others.push({ method: pm, amount: val });
+                                                                else if (e.target.value === '') others.push({ method: pm, amount: 0 }); // Allow clearing
+                                                                setPosSplitDetails(others.filter(x => x.amount > 0 || x.method === pm));
+                                                            }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )
-                                    })}
-                                    <div className="flex justify-between pt-2 border-t border-white/10 mt-2">
-                                        <span className="text-xs font-bold text-emerald-400">Total Ingresado:</span>
-                                        <span className={`text-sm font-bold font-mono ${Math.abs(posSplitDetails.reduce((s, x) => s + x.amount, 0) - posCart.reduce((s, i) => s + i.price, 0)) < 0.1 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            )
+                                        })}
+                                    </div>
+                                    <div className="flex justify-between pt-1 border-t border-white/10 mt-1">
+                                        <span className="text-[10px] font-bold text-emerald-400">Total:</span>
+                                        <span className={`text-xs font-bold font-mono ${Math.abs(posSplitDetails.reduce((s, x) => s + x.amount, 0) - posCart.reduce((s, i) => s + i.price, 0)) < 0.1 ? 'text-emerald-400' : 'text-red-400'}`}>
                                             S/. {posSplitDetails.reduce((s, x) => s + x.amount, 0).toFixed(2)}
                                         </span>
                                     </div>

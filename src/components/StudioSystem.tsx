@@ -26,7 +26,7 @@ const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // P
 type Employee = { id: string; name: string; role: string; photo?: string; avatarSeed: string; commission: number | string; password?: string; };
 type SimpleExpense = { id: string; category: string; amount: number; description: string; date: Date; };
 type Transaction = { id: string; employeeId: string; serviceName: string; price: number; date: Date; paymentMethod?: string; };
-type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending' | 'completed'; paymentMethod?: string; paymentVoucher?: string; description?: string; }; // Added description
+type Booking = { id: string; clientName: string; clientPhone: string; service: string; professionalId: string; date: Date; status: 'confirmed' | 'pending' | 'completed'; paymentMethod?: string; paymentVoucher?: string; description?: string; isPaid?: boolean; }; // Added isPaid
 type ServiceItem = { id: string; name: string; };
 
 // --- Prop Types ---
@@ -374,6 +374,14 @@ export default function StudioSystem() {
                 }
             }
 
+            // ⚡ UPDATE BOOKING STATUS TO PAID
+            if (posClientName) {
+                const clientBookings = bookings.filter(b => b.clientName === posClientName && b.status !== 'completed');
+                for (const booking of clientBookings) {
+                    await updateDoc(doc(db, "bookings", booking.id), { isPaid: true });
+                }
+            }
+
             // Speak Summary
             const workersInvolved = Array.from(new Set(posCart.map(i => i.emplName)));
             const utterance = new SpeechSynthesisUtterance(`Cobro exitoso de ${total.toFixed(2)} soles. Gracias ${workersInvolved.join(' y ')}.`);
@@ -594,17 +602,26 @@ export default function StudioSystem() {
 
                                         {b.status !== 'completed' && (
                                             <button
+                                                disabled={!b.isPaid}
                                                 onClick={async () => {
+                                                    if (!b.isPaid) return;
                                                     if (confirm(`¿Terminaste con ${b.clientName}?`)) {
-                                                        const utterance = new SpeechSynthesisUtterance(`${currentWorker.name} terminó su servicio, no se olvide de cobrar el servicio.`);
+                                                        const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${currentWorker.name} ahora está libre para el siguiente cliente.`);
                                                         utterance.lang = 'es-ES';
                                                         window.speechSynthesis.speak(utterance);
                                                         await updateDoc(doc(db, "bookings", b.id), { status: 'completed' });
                                                     }
                                                 }}
-                                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 transition-all mt-2"
+                                                className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all mt-2 ${b.isPaid
+                                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'
+                                                    : 'bg-white/10 text-white/30 cursor-not-allowed border border-white/5'
+                                                    }`}
                                             >
-                                                <CheckCircle2 className="w-5 h-5" /> Terminar Servicio
+                                                {b.isPaid ? (
+                                                    <><CheckCircle2 className="w-5 h-5" /> Terminar Servicio</>
+                                                ) : (
+                                                    <><Lock className="w-4 h-4" /> Esperando Pago</>
+                                                )}
                                             </button>
                                         )}
                                     </div>

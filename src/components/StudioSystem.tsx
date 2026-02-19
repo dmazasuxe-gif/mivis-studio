@@ -111,6 +111,7 @@ export default function StudioSystem() {
     const [addItemServ, setAddItemServ] = useState('');
     const [addItemEmp, setAddItemEmp] = useState('');
     const [addItemPrice, setAddItemPrice] = useState('');
+    const [posClientName, setPosClientName] = useState<string | null>(null); // To store client name for POS header
 
     // Voice Alert State
 
@@ -384,6 +385,7 @@ export default function StudioSystem() {
             setShowPos(false); // Close Modal
             setIsPosSplit(false);
             setPosSplitDetails([]);
+            setPosClientName(null);
             setAddItemServ(''); setAddItemEmp(''); setAddItemPrice('');
             alert(`✅ Cobro de S/. ${total.toFixed(2)} registrado exitosamente.`);
         } catch (e) {
@@ -734,7 +736,7 @@ export default function StudioSystem() {
                                         <motion.div layoutId={emp.id} key={emp.id} className={`group relative ${colorClass} rounded-2xl p-4 flex flex-col gap-4 shadow-lg hover:shadow-xl transition-all h-full`}>
                                             <div className="flex justify-between items-start">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden shadow-md cursor-pointer" onClick={() => { setSelectedEmp(emp); setSelService(null); }}>
+                                                    <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden shadow-md">
                                                         <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-16 h-16 rounded-full object-cover border-2 border-yellow-500/50" alt={`Foto de ${emp.name}`} />
                                                     </div>
                                                     <div>
@@ -759,32 +761,42 @@ export default function StudioSystem() {
                                                     return (
                                                         <div
                                                             onClick={() => {
-                                                                // Open POS pre-filled with this client's service
+                                                                // Open POS with Client Context
+                                                                setPosClientName(currentBooking.clientName);
+
+                                                                // Find Service Price if possible
                                                                 const serviceData = services.find(s => s.name === currentBooking.service);
-                                                                const price = serviceData ? serviceData.price : 0;
+                                                                // We use 0 if not found, user can edit in modal
+                                                                const initialPrice = 0;
+
                                                                 setPosCart([{
                                                                     id: Math.random().toString(36),
                                                                     service: currentBooking.service,
                                                                     emplId: emp.id,
                                                                     emplName: emp.name,
-                                                                    price: price
+                                                                    price: initialPrice
                                                                 }]);
                                                                 setShowPos(true);
                                                             }}
-                                                            className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-sm relative overflow-hidden cursor-pointer hover:bg-red-500/20 transition-colors group/occupied"
+                                                            className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-lg shadow-red-900/20 relative overflow-hidden cursor-pointer hover:bg-red-500/20 transition-all group/occupied hover:scale-[1.02] active:scale-[0.98]"
                                                         >
                                                             <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                                                            <div className="absolute top-2 right-2 opacity-0 group-hover/occupied:opacity-100 transition-opacity bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Cobrar</div>
-                                                            <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
+                                                            <div className="absolute top-2 right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md animate-pulse">COBRAR</div>
+
+                                                            <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
                                                                 <span className="relative flex h-2 w-2">
                                                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                                                                 </span>
-                                                                OCUPADO - CLICK PARA COBRAR
+                                                                OCUPADO
                                                             </p>
-                                                            <p className="text-lg font-black text-white leading-tight truncate">{currentBooking.clientName}</p>
-                                                            <p className="text-xs font-medium text-white/70">{currentBooking.service}</p>
-                                                            {currentBooking.description && <p className="text-[10px] italic text-white/50 mt-1 border-t border-white/10 pt-1">"{currentBooking.description}"</p>}
+
+                                                            <p className="text-xl font-black text-white leading-tight truncate drop-shadow-md mb-1">{currentBooking.clientName}</p>
+                                                            <div className="bg-black/30 rounded-lg py-1 px-2 inline-block border border-white/5">
+                                                                <p className="text-xs font-medium text-emerald-200">{currentBooking.service}</p>
+                                                            </div>
+
+                                                            {currentBooking.description && <p className="text-[10px] italic text-white/40 mt-2 border-t border-white/5 pt-1">"{currentBooking.description}"</p>}
                                                         </div>
                                                     );
                                                 }
@@ -843,8 +855,13 @@ export default function StudioSystem() {
 
                 {/* 🛒 MODAL POS (GLOBAL) */}
                 {showPos && (
-                    <Modal onClose={() => setShowPos(false)}>
-                        <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>💰 Punto de Venta</h3>
+                    <Modal onClose={() => { setShowPos(false); setPosClientName(null); }}>
+                        <div className="text-center mb-6">
+                            <h3 className={`${playfair.className} text-3xl text-yellow-500 drop-shadow-sm`}>
+                                {posClientName ? `Cobrar a ${posClientName}` : 'Punto de Venta'}
+                            </h3>
+                            {posClientName && <p className="text-emerald-400/60 text-xs uppercase tracking-widest mt-1">Finalizar Servicio</p>}
+                        </div>
 
                         {/* Builder */}
                         <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-6">
@@ -920,8 +937,8 @@ export default function StudioSystem() {
                             <label className="text-xs text-white/40 uppercase font-bold block mb-2">Método de Pago</label>
 
                             <div className="flex items-center gap-2 mb-4">
-                                <button onClick={() => { setIsPosSplit(!isPosSplit); setPosSplitDetails([]); }} className={`text-xs px-3 py-1 rounded-full border ${isPosSplit ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent text-white/50 border-white/20'}`}>
-                                    🔀 Dividir Pago
+                                <button onClick={() => { setIsPosSplit(!isPosSplit); setPosSplitDetails([]); }} className={`flex-1 text-xs px-3 py-2 rounded-xl border transition-all font-bold flex items-center justify-center gap-2 ${isPosSplit ? 'bg-yellow-500 text-black border-yellow-500 shadow-lg' : 'bg-white/5 text-emerald-200 border-white/20 hover:bg-white/10'}`}>
+                                    {isPosSplit ? '➖ Pago Único' : '➕ Dividir Pago / Varios Métodos'}
                                 </button>
                             </div>
 

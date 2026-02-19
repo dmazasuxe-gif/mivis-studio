@@ -223,13 +223,17 @@ export default function StudioSystem() {
                     // Initial population - DO NOT SPEAK
                     bookings.filter(bk => bk.status === 'completed').forEach(bk => completedBookingsRef.current.add(bk.id));
                 } else {
-                    // Real update
-                    const workerName = employees.find(e => e.id === b.professionalId)?.name || 'El profesional';
-                    const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${workerName} ahora está libre para el siguiente cliente.`);
-                    utterance.lang = 'es-ES';
-                    utterance.rate = 1.0;
-                    window.speechSynthesis.speak(utterance);
+                    // Real update found
+                    // 🔊 ONLY SPEAK IF WE ARE IN ADMIN DASHBOARD
+                    if (view === 'ADMIN_DASHBOARD') {
+                        const workerName = employees.find(e => e.id === b.professionalId)?.name || 'El profesional';
+                        const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${workerName} ahora está libre para el siguiente cliente.`);
+                        utterance.lang = 'es-ES';
+                        utterance.rate = 1.0;
+                        window.speechSynthesis.speak(utterance);
+                    }
 
+                    // Mark as seen so we don't process it again
                     completedBookingsRef.current.add(b.id);
                 }
             }
@@ -238,7 +242,7 @@ export default function StudioSystem() {
         // Ensure ref keeps up with all completed ones to prevent re-triggering
         bookings.filter(b => b.status === 'completed').forEach(b => completedBookingsRef.current.add(b.id));
 
-    }, [bookings, employees]);
+    }, [bookings, employees, view]);
 
     // --- LOGIC ---
 

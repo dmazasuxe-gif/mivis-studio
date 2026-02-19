@@ -119,6 +119,7 @@ export default function StudioSystem() {
     const [alertedBookings, setAlertedBookings] = useState<Set<string>>(new Set());
     // Ref to track completed bookings for Admin voice alert
     const completedBookingsRef = useRef<Set<string>>(new Set());
+    const hasInitializedRef = useRef(false);
 
     // 🔥 1. CONEXIÓN REAL-TIME CON FIREBASE (Optimized)
     useEffect(() => {
@@ -200,47 +201,39 @@ export default function StudioSystem() {
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
-        bookings.forEach(b => {
-            if (b.status === 'completed' && !completedBookingsRef.current.has(b.id)) {
-                // Determine if this is a "recent" completion we should announce.
-                // Simple heuristic: If it's loaded from DB as completed initially, we might not want to announce it 
-                // unless we are sure it just happened. 
-                // However, since this runs on snapshot updates, we can assume if it wasn't in our Ref, it's new *to this session*.
-                // To avoid announcing ALL completed bookings on page load, we can populate the ref initially silently.
-                // BUT, to keep it simple as requested: We'll announce it if the component has been mounted for a moment?
-                // Better: The User specifically asked for "when a worker clicks finish". 
-                // Since we are detecting the STATE CHANGE here, this runs on the Admin's machine when the DB updates.
+        // Filter currently completed bookings
+        const currentCompleted = bookings.filter(b => b.status === 'completed');
 
-                // Hack: On initial load (bookings change from [] to [...data]), we might get a bunch of completed ones.
-                // We should only announce if we have seen the 'pending/confirmed' state before? 
-                // Or simply: just announce it. But to avoid annoyance on refresh, strictly we need a timestamp.
-                // Let's rely on the fact that `completedBookingsRef` starts empty, so on first load it adds all.
-                // We should SKIP the alert if it's the *initial* load.
-                // We can check if `completedBookingsRef.current.size === 0` and bookings.length > 0 -> Just populate, don't speak?
-                // Let's try: Populate ref silently first time.
+        // INITIALIZATION CHECK
+        if (!hasInitializedRef.current) {
+            // First time logic: Populate ref with all existing completed bookings so we don't announce them.
+            currentCompleted.forEach(b => completedBookingsRef.current.add(b.id));
 
-                if (completedBookingsRef.current.size === 0 && bookings.length > 0) {
-                    // Initial population - DO NOT SPEAK
-                    bookings.filter(bk => bk.status === 'completed').forEach(bk => completedBookingsRef.current.add(bk.id));
-                } else {
-                    // Real update found
-                    // 🔊 ONLY SPEAK IF WE ARE IN ADMIN DASHBOARD
-                    if (view === 'ADMIN_DASHBOARD') {
-                        const workerName = employees.find(e => e.id === b.professionalId)?.name || 'El profesional';
-                        const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${workerName} ahora está libre para el siguiente cliente.`);
-                        utterance.lang = 'es-ES';
-                        utterance.rate = 1.0;
-                        window.speechSynthesis.speak(utterance);
-                    }
+            // Mark as initialized only if we have data (or if we trust the first load is 'it')
+            // If bookings array is not empty, we assume we have loaded.
+            if (bookings.length > 0) {
+                hasInitializedRef.current = true;
+            }
+            return;
+        }
 
-                    // Mark as seen so we don't process it again
-                    completedBookingsRef.current.add(b.id);
+        // REAL-TIME UPDATES
+        currentCompleted.forEach(b => {
+            if (!completedBookingsRef.current.has(b.id)) {
+                // New completion detected!
+                if (view === 'ADMIN_DASHBOARD') {
+                    // 🔊 SPEAK
+                    const workerName = employees.find(e => e.id === b.professionalId)?.name || 'El profesional';
+                    window.speechSynthesis.cancel(); // Reset any stuck speech
+                    const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${workerName} ahora está libre para el siguiente cliente.`);
+                    utterance.lang = 'es-ES';
+                    utterance.rate = 1.0;
+                    window.speechSynthesis.speak(utterance);
                 }
+                // Mark as seen
+                completedBookingsRef.current.add(b.id);
             }
         });
-
-        // Ensure ref keeps up with all completed ones to prevent re-triggering
-        bookings.filter(b => b.status === 'completed').forEach(b => completedBookingsRef.current.add(b.id));
 
     }, [bookings, employees, view]);
 

@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent, MouseEvent } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Cloud, Lock, LogOut, Store, Send, Printer, AlertTriangle, Edit2
+    Calendar, Clock, CheckCircle2, Lock, LogOut, Store, Send, Printer, AlertTriangle, Edit2, FileText
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Playfair_Display, Inter } from 'next/font/google';
 
@@ -83,8 +82,16 @@ export default function StudioSystem() {
     const [newEmpPhoto, setNewEmpPhoto] = useState<string | null>(null);
     const [selService, setSelService] = useState<string | null>(null);
     const [manPrice, setManPrice] = useState('');
-    const [transPayment, setTransPayment] = useState(PAY_METHODS[0]);
-    const [isManaging, setIsManaging] = useState(false);
+
+    // Booking Edit State
+    const [isEditingBooking, setIsEditingBooking] = useState(false);
+    const [editBName, setEditBName] = useState('');
+    const [editBPhone, setEditBPhone] = useState('');
+    const [editBService, setEditBService] = useState('');
+    const [editBProf, setEditBProf] = useState('');
+    const [editBDate, setEditBDate] = useState('');
+    const [editBTime, setEditBTime] = useState('');
+    const [editBDesc, setEditBDesc] = useState('');
 
 
     // Split Payment State
@@ -246,6 +253,50 @@ export default function StudioSystem() {
     const handleConfirmWhatsApp = (book: Booking) => {
         const msg = `Hola ${book.clientName}! 💅 Te escribimos de *Mivis Studio* para confirmar tu cita de hoy a las *${book.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}*. ¿Nos confirmas tu asistencia? ✨`;
         window.open(`https://wa.me/51${book.clientPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    };
+
+    const handleStartEditBooking = () => {
+        if (!selectedBooking) return;
+        setEditBName(selectedBooking.clientName);
+        setEditBPhone(selectedBooking.clientPhone);
+        setEditBService(selectedBooking.service);
+        setEditBProf(selectedBooking.professionalId || 'pending');
+        setEditBDate(selectedBooking.date.getFullYear() + '-' + String(selectedBooking.date.getMonth() + 1).padStart(2, '0') + '-' + String(selectedBooking.date.getDate()).padStart(2, '0'));
+        setEditBTime(selectedBooking.date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+        setEditBDesc(selectedBooking.description || '');
+        setIsEditingBooking(true);
+    };
+
+    const handleSaveBooking = async () => {
+        if (!selectedBooking || !editBName || !editBService) return;
+        try {
+            const newDate = new Date(editBDate + 'T' + editBTime);
+            await updateDoc(doc(db, "bookings", selectedBooking.id), {
+                clientName: editBName,
+                clientPhone: editBPhone,
+                service: editBService,
+                professionalId: editBProf || 'pending',
+                date: newDate,
+                description: editBDesc
+            });
+
+            // Update local state purely for immediate UI feedback (Snapshot handles real sync)
+            setSelectedBooking({
+                ...selectedBooking,
+                clientName: editBName,
+                clientPhone: editBPhone,
+                service: editBService,
+                professionalId: editBProf || 'pending',
+                date: newDate,
+                description: editBDesc
+            });
+
+            setIsEditingBooking(false);
+            alert("✅ Cita actualizada correctamente");
+        } catch (e) {
+            console.error(e);
+            alert("Error al actualizar cita");
+        }
     };
 
 
@@ -543,7 +594,7 @@ export default function StudioSystem() {
     if (view === 'CLIENT_BOOKING') {
         return (
             <div className="min-h-screen bg-[#061814] text-[#e0e7e4] font-sans flex flex-col relative overflow-hidden">
-                {/* 🏷️ Fondo Personalizado: Asegúrate de guardar 'fondo.jpg' en la carpeta public */}
+                {/* 🏷️ Fondo Personalizado: Asegúrate de guardar 'fondo.jpeg' en la carpeta public */}
                 <div className="absolute inset-0 bg-[url('/fondo.jpeg')] bg-cover bg-center opacity-40 blur-[3px]"></div>
                 <div className="absolute inset-0 bg-gradient-to-br from-[#061814]/90 via-[#061814]/60 to-transparent"></div>
 
@@ -628,15 +679,22 @@ export default function StudioSystem() {
                                         <motion.div layoutId={emp.id} key={emp.id} className={`group relative ${colorClass} rounded-2xl p-4 flex flex-col gap-4 shadow-lg hover:shadow-xl transition-all h-full`}>
                                             <div className="flex justify-between items-start">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden shadow-md cursor-pointer" onClick={() => { setSelectedEmp(emp); setSelService(null); setIsManaging(false); setTransPayment(PAY_METHODS[0]); setIsSplit(false); setSplitParts([]); }}>
-                                                        <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full object-cover bg-white" alt={emp.name} />
+                                                    <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden shadow-md cursor-pointer" onClick={() => { setSelectedEmp(emp); setSelService(null); }}>
+                                                        <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-16 h-16 rounded-full object-cover border-2 border-yellow-500/50" alt={`Foto de ${emp.name}`} />
                                                     </div>
                                                     <div>
-                                                        <h3 className={`text-lg font-bold leading-none`}>{emp.name}</h3>
-                                                        <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">{emp.role}</p>
+                                                        <h3 className="text-lg font-bold text-white">{emp.name}</h3>
+                                                        <p className="text-xs text-white/50">{emp.role}</p>
+                                                    </div>
+                                                    <div className="ml-auto flex flex-col gap-2">
+                                                        <button onClick={(e) => { e.stopPropagation(); setCurrentWorker(emp); setView('WORKER_DASHBOARD'); }} className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400 p-2 rounded-full transition-colors border border-emerald-500/30" aria-label="Ver perfil">
+                                                            <ChevronRight className="w-5 h-5" />
+                                                        </button>
+                                                        <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-500/10 transition-colors" aria-label="Eliminar empleado">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="p-2 text-black/20 hover:text-red-600 hover:bg-red-500/10 rounded-full opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
                                             </div>
 
                                             {/* Current Client Display (Top Priority) */}
@@ -910,63 +968,140 @@ export default function StudioSystem() {
 
                     {/* MODAL DETALLE DE CITA */}
                     {selectedBooking && (
-                        <Modal onClose={() => setSelectedBooking(null)}>
+                        <Modal onClose={() => { setSelectedBooking(null); setIsEditingBooking(false); }}>
                             <div className="text-center relative">
                                 {selectedBooking.status === 'completed' && <div className="absolute top-1/2 left-0 w-full h-1 bg-red-500/80 -rotate-12 z-20 pointer-events-none"></div>}
-                                <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-2`}>
-                                    {selectedBooking.status === 'completed' ? 'Servicio Terminado' : 'Detalle de Cita'}
-                                </h3>
-                                {/* ... existing timestamp check ... */}
+
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="w-8"></div> {/* Spacer */}
+                                    <h3 className={`${playfair.className} text-2xl text-yellow-500`}>
+                                        {selectedBooking.status === 'completed' ? 'Servicio Terminado' : 'Detalle de Cita'}
+                                    </h3>
+                                    <button onClick={isEditingBooking ? handleSaveBooking : handleStartEditBooking} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-yellow-500 transition-colors">
+                                        {isEditingBooking ? <CheckCircle2 className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                                    </button>
+                                </div>
+
                                 {new Date().getTime() > selectedBooking.date.getTime() - 900000 && new Date().getTime() < selectedBooking.date.getTime() && selectedBooking.status !== 'completed' && (
                                     <div className="bg-red-500/20 text-red-400 text-xs font-bold px-3 py-1 rounded-full inline-block mb-4 animate-pulse border border-red-500/50">
                                         ⚠️ ¡La cita es en 15 min!
                                     </div>
                                 )}
-                                <div className={`space-y-6 text-left bg-black/20 p-6 rounded-2xl border border-white/5 relative overflow-hidden ${selectedBooking.status === 'completed' ? 'opacity-50' : ''}`}>
-                                    {selectedBooking.status === 'completed' && <div className="absolute inset-0 bg-black/20 z-10"></div>}
-                                    <div>
-                                        <p className="text-[10px] text-white/40 uppercase font-bold">Cliente</p>
-                                        <p className="text-xl text-white font-medium">{selectedBooking.clientName}</p>
-                                        <p className="text-sm text-emerald-400 font-mono">{selectedBooking.clientPhone}</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-[10px] text-white/40 uppercase font-bold">Fecha</p>
-                                            <p className="text-white">{selectedBooking.date.toLocaleDateString()}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-white/40 uppercase font-bold">Hora</p>
-                                            <p className="text-white text-lg font-bold text-yellow-500">{selectedBooking.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-white/40 uppercase font-bold">Servicio</p>
-                                        <p className="text-white">{selectedBooking.service}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-white/40 uppercase font-bold">Método de Pago</p>
-                                        <div className="bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-md text-sm font-bold inline-block border border-yellow-500/20">
-                                            {selectedBooking.paymentMethod || 'No especificado'}
-                                        </div>
-                                    </div>
 
-                                    {selectedBooking.paymentVoucher && (
-                                        <div className="col-span-2">
-                                            <p className="text-[10px] text-white/40 uppercase font-bold mb-2">Comprobante de Pago</p>
-                                            <div className="rounded-xl overflow-hidden border border-white/10">
-                                                <img src={selectedBooking.paymentVoucher} className="w-full object-cover" alt="Voucher" />
+                                <div className={`space-y-4 text-left bg-black/20 p-6 rounded-2xl border border-white/5 relative overflow-hidden ${selectedBooking.status === 'completed' ? 'opacity-50' : ''}`}>
+                                    {selectedBooking.status === 'completed' && <div className="absolute inset-0 bg-black/20 z-10"></div>}
+
+                                    {isEditingBooking ? (
+                                        // 📝 EDIT MODE
+                                        <div className="space-y-3 animate-in fade-in">
+                                            <div>
+                                                <label className="text-[10px] text-white/40 uppercase font-bold">Cliente</label>
+                                                <input className="input-modern py-1 px-2 text-sm" value={editBName} onChange={e => setEditBName(e.target.value)} placeholder="Nombre" />
                                             </div>
+                                            <div>
+                                                <label className="text-[10px] text-white/40 uppercase font-bold">Teléfono</label>
+                                                <input className="input-modern py-1 px-2 text-sm" value={editBPhone} onChange={e => setEditBPhone(e.target.value)} placeholder="Teléfono" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] text-white/40 uppercase font-bold">Fecha</label>
+                                                    <input type="date" className="input-modern py-1 px-2 text-sm" value={editBDate} onChange={e => setEditBDate(e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-white/40 uppercase font-bold">Hora</label>
+                                                    <input type="time" className="input-modern py-1 px-2 text-sm" value={editBTime} onChange={e => setEditBTime(e.target.value)} />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-white/40 uppercase font-bold">Servicio</label>
+                                                <select className="input-modern py-1 px-2 text-sm" value={editBService} onChange={e => setEditBService(e.target.value)}>
+                                                    <option value="">Seleccionar...</option>
+                                                    {services.map(s => <option key={s.id} value={s.name} className="bg-black">{s.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-white/40 uppercase font-bold">Profesional</label>
+                                                <select className="input-modern py-1 px-2 text-sm" value={editBProf} onChange={e => setEditBProf(e.target.value)}>
+                                                    <option value="pending">Sin Asignar</option>
+                                                    {employees.map(e => <option key={e.id} value={e.id} className="bg-black">{e.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-white/40 uppercase font-bold">Descripción / Notas</label>
+                                                <textarea className="input-modern py-1 px-2 text-sm min-h-[60px]" value={editBDesc} onChange={e => setEditBDesc(e.target.value)} placeholder="Notas..." />
+                                            </div>
+                                            <button onClick={() => setIsEditingBooking(false)} className="w-full text-xs text-red-400 hover:text-red-300 mt-2 underline">Cancelar Edición</button>
                                         </div>
+                                    ) : (
+                                        // 👀 VIEW MODE
+                                        <>
+                                            <div>
+                                                <p className="text-[10px] text-white/40 uppercase font-bold">Cliente</p>
+                                                <p className="text-xl text-white font-medium">{selectedBooking.clientName}</p>
+                                                <p className="text-sm text-emerald-400 font-mono">{selectedBooking.clientPhone}</p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[10px] text-white/40 uppercase font-bold">Fecha</p>
+                                                    <p className="text-white">{selectedBooking.date.toLocaleDateString()}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] text-white/40 uppercase font-bold">Hora</p>
+                                                    <p className="text-white text-lg font-bold text-yellow-500">{selectedBooking.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-white/40 uppercase font-bold">Servicio</p>
+                                                <p className="text-white">{selectedBooking.service}</p>
+                                            </div>
+
+                                            {selectedBooking.professionalId && selectedBooking.professionalId !== 'pending' && (
+                                                <div>
+                                                    <p className="text-[10px] text-white/40 uppercase font-bold">Atendido por</p>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                        <span className="text-emerald-100 font-bold">{employees.find(e => e.id === selectedBooking.professionalId)?.name || '...'}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {selectedBooking.description && (
+                                                <div className="bg-white/5 p-3 rounded-lg border border-white/5 mt-2">
+                                                    <p className="text-[10px] text-white/40 uppercase font-bold mb-1 flex items-center gap-1"><FileText className="w-3 h-3" /> Notas</p>
+                                                    <p className="text-white/80 text-sm italic">"{selectedBooking.description}"</p>
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <p className="text-[10px] text-white/40 uppercase font-bold">Método de Pago</p>
+                                                <div className="bg-yellow-500/10 text-yellow-500 px-3 py-1 rounded-md text-sm font-bold inline-block border border-yellow-500/20">
+                                                    {selectedBooking.paymentMethod || 'No especificado'}
+                                                </div>
+                                            </div>
+
+                                            {selectedBooking.paymentVoucher && (
+                                                <div className="col-span-2">
+                                                    <p className="text-[10px] text-white/40 uppercase font-bold mb-2">Comprobante de Pago</p>
+                                                    <div className="rounded-xl overflow-hidden border border-white/10">
+                                                        <img src={selectedBooking.paymentVoucher} className="w-full object-cover" alt="Voucher" />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
 
-                                <button onClick={() => handleConfirmWhatsApp(selectedBooking)} className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold py-4 rounded-xl mt-6 flex items-center justify-center gap-2 shadow-lg transition-all">
-                                    <Send className="w-5 h-5" /> Confirmar por WhatsApp
-                                </button>
+                                {!isEditingBooking && (
+                                    <>
+                                        <button onClick={() => handleConfirmWhatsApp(selectedBooking)} className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold py-4 rounded-xl mt-6 flex items-center justify-center gap-2 shadow-lg transition-all">
+                                            <Send className="w-5 h-5" /> Confirmar por WhatsApp
+                                        </button>
 
-                                <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2">
-                                    <Trash2 className="w-4 h-4" /> Eliminar Cliente
-                                </button>
+                                        <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2">
+                                            <Trash2 className="w-4 h-4" /> Eliminar Cliente
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </Modal>
                     )}
@@ -1082,7 +1217,7 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
                                                 <span className="font-bold">Atendido por: {emp?.name || 'Desconocido'}</span>
                                             </div>
                                         )}
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(b.id); }} className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(b.id); }} className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" aria-label="Eliminar cita"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             );
@@ -1490,13 +1625,22 @@ function Modal({ children, onClose }: { children: React.ReactNode, onClose: () =
 function BouncingGallery({ images, onSelect }: { images: string[], onSelect: (src: string) => void }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const boxSize = 150; // Image size
-    const items = useRef(images.map(() => ({
-        x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 500),
-        y: Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 500),
-        vx: (Math.random() - 0.5) * 1.5,
-        vy: (Math.random() - 0.5) * 1.5,
-        target: null as HTMLImageElement | null
-    })));
+
+    // Fix: Use a ref to hold items, but initialize inside useEffect to avoid render impurity
+    const items = useRef<{ x: number, y: number, vx: number, vy: number, target: HTMLImageElement | null }[]>([]);
+
+    useEffect(() => {
+        // Initialize positions only once on mount
+        if (items.current.length === 0 && typeof window !== 'undefined') {
+            items.current = images.map(() => ({
+                x: Math.random() * (window.innerWidth - 150),
+                y: Math.random() * (window.innerHeight - 150),
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: (Math.random() - 0.5) * 1.5,
+                target: null as HTMLImageElement | null
+            }));
+        }
+    }, [images]);
 
     useEffect(() => {
         let animationId: number;
@@ -1545,11 +1689,12 @@ function BouncingGallery({ images, onSelect }: { images: string[], onSelect: (sr
             {images.map((src, i) => (
                 <img
                     key={i}
-                    ref={el => { items.current[i].target = el; }}
+                    ref={el => { if (items.current[i]) items.current[i].target = el; }}
                     src={src}
                     onClick={() => onSelect(src)}
                     className="absolute w-32 h-32 md:w-36 md:h-36 object-cover rounded-2xl shadow-2xl border border-white/10 cursor-pointer hover:scale-110 hover:border-yellow-500/50 hover:opacity-100 transition-transform pointer-events-auto opacity-60 z-0"
                     style={{ left: 0, top: 0, willChange: 'transform' }}
+                    alt={`Gallery Image ${i}`}
                 />
             ))}
         </div>

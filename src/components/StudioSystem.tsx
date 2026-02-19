@@ -1886,17 +1886,17 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="font-mono text-emerald-200">S/. {t.price}</span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => startEdit(t)}
-                                            className="p-1.5 hover:bg-white/10 rounded-lg text-white/50 hover:text-yellow-500 transition-colors"
+                                            className="p-1.5 bg-white/5 hover:bg-yellow-500/20 rounded-lg text-white/40 hover:text-yellow-500 transition-colors"
                                             title="Editar"
                                         >
                                             <Edit2 className="w-3 h-3" />
                                         </button>
                                         <button
                                             onClick={() => onDelete(t.id)}
-                                            className="p-1.5 hover:bg-red-500/10 rounded-lg text-white/50 hover:text-red-400 transition-colors"
+                                            className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-lg text-white/40 hover:text-red-400 transition-colors"
                                             title="Eliminar"
                                         >
                                             <Trash2 className="w-3 h-3" />

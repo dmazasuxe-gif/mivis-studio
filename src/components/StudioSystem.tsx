@@ -1680,6 +1680,27 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
         }
     };
 
+    const handleEditTransaction = async (id: string, newName: string, newPrice: number) => {
+        if (!newName || isNaN(newPrice)) return alert("Datos inválidos");
+        try {
+            await updateDoc(doc(db, "transactions", id), { serviceName: newName, price: Number(newPrice) });
+        } catch (e) {
+            console.error("Error updating transaction:", e);
+            alert("Error al actualizar");
+        }
+    };
+
+    const handleDeleteTransaction = async (id: string) => {
+        if (confirm("¿Estás seguro de eliminar este servicio del historial? Esta acción afectará los reportes y comisiones.")) {
+            try {
+                await deleteDoc(doc(db, "transactions", id));
+            } catch (e) {
+                console.error("Error deleting transaction:", e);
+                alert("Error al eliminar");
+            }
+        }
+    };
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-white space-y-6">
             <AnimatePresence>
@@ -1689,22 +1710,41 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
                         <p className="text-xs text-white/40 text-center mb-6 uppercase tracking-widest">Historial de Servicios</p>
 
                         <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                            <ReportListBlock title="Hoy" transactions={transactions.filter((t: Transaction) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)} onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)} />
-                            <ReportListBlock title="Esta Semana" transactions={transactions.filter((t: Transaction) => {
-                                const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
-                                return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
-                            })} onSend={() => sendDetailedWhatsApp("Semanal", transactions.filter((t: any) => {
-                                const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
-                                return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
-                            }), selectedRepEmp.name, selectedRepEmp.commission)} />
-                            <ReportListBlock title="Este Mes" transactions={transactions.filter((t: Transaction) => {
-                                const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
-                            })} onSend={() => sendDetailedWhatsApp("Mensual", transactions.filter((t: any) => {
-                                const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
-                            }), selectedRepEmp.name, selectedRepEmp.commission)} />
-                        </div>
+                            <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                                <ReportListBlock
+                                    title="Hoy"
+                                    transactions={transactions.filter((t: Transaction) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)}
+                                    onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)}
+                                    onEdit={handleEditTransaction}
+                                    onDelete={handleDeleteTransaction}
+                                />
+                                <ReportListBlock
+                                    title="Esta Semana"
+                                    transactions={transactions.filter((t: Transaction) => {
+                                        const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                        const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
+                                        return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                                    })}
+                                    onSend={() => sendDetailedWhatsApp("Semanal", transactions.filter((t: any) => {
+                                        const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                        const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
+                                        return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                                    }), selectedRepEmp.name, selectedRepEmp.commission)}
+                                    onEdit={handleEditTransaction}
+                                    onDelete={handleDeleteTransaction}
+                                />
+                                <ReportListBlock
+                                    title="Este Mes"
+                                    transactions={transactions.filter((t: Transaction) => {
+                                        const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
+                                    })}
+                                    onSend={() => sendDetailedWhatsApp("Mensual", transactions.filter((t: any) => {
+                                        const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
+                                    }), selectedRepEmp.name, selectedRepEmp.commission)}
+                                    onEdit={handleEditTransaction}
+                                    onDelete={handleDeleteTransaction}
+                                />
+                            </div>
                     </Modal>
                 )}
             </AnimatePresence>
@@ -1777,8 +1817,32 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
     );
 }
 
-function ReportListBlock({ title, transactions, onSend }: { title: string, transactions: Transaction[], onSend: () => void }) {
+function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
+    title: string,
+    transactions: Transaction[],
+    onSend: () => void,
+    onEdit: (id: string, name: string, price: number) => void,
+    onDelete: (id: string) => void
+}) {
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [tempName, setTempName] = useState("");
+    const [tempPrice, setTempPrice] = useState("");
+
+    const startEdit = (t: Transaction) => {
+        setEditingId(t.id);
+        setTempName(t.serviceName);
+        setTempPrice(t.price.toString());
+    };
+
+    const saveEdit = () => {
+        if (editingId && tempName && tempPrice) {
+            onEdit(editingId, tempName, parseFloat(tempPrice));
+            setEditingId(null);
+        }
+    };
+
     if (transactions.length === 0) return null;
+
     return (
         <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
             <h4 className="bg-emerald-900/30 p-2 text-[10px] font-bold uppercase text-emerald-400 tracking-wider flex justify-between items-center px-4">
@@ -1790,12 +1854,57 @@ function ReportListBlock({ title, transactions, onSend }: { title: string, trans
             </h4>
             <div className="divide-y divide-white/5">
                 {transactions.sort((a: Transaction, b: Transaction) => b.date.getTime() - a.date.getTime()).map((t: Transaction) => (
-                    <div key={t.id} className="p-3 flex justify-between items-center text-sm">
-                        <div>
-                            <p className="text-white font-medium">{t.serviceName || 'Servicio'}</p>
-                            <p className="text-[10px] text-white/40">{t.date.toLocaleString()} • <span className="text-yellow-500/80">{t.paymentMethod || 'Efectivo'}</span></p>
-                        </div>
-                        <span className="font-mono text-emerald-200">S/. {t.price}</span>
+                    <div key={t.id} className="p-3 flex justify-between items-center text-sm group hover:bg-white/5 transition-colors">
+                        {editingId === t.id ? (
+                            <div className="flex flex-1 items-center gap-2 mr-2">
+                                <div className="flex-1 space-y-1">
+                                    <input
+                                        value={tempName}
+                                        onChange={e => setTempName(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/20 rounded px-2 py-1 text-xs text-white outline-none focus:border-yellow-500"
+                                        placeholder="Servicio"
+                                        autoFocus
+                                    />
+                                    <input
+                                        type="number"
+                                        value={tempPrice}
+                                        onChange={e => setTempPrice(e.target.value)}
+                                        className="w-24 bg-black/40 border border-white/20 rounded px-2 py-1 text-xs text-white outline-none focus:border-yellow-500 font-mono"
+                                        placeholder="Precio"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <button onClick={saveEdit} className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500 hover:text-white transition-colors"><CheckCircle2 className="w-3 h-3" /></button>
+                                    <button onClick={() => setEditingId(null)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"><X className="w-3 h-3" /></button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div>
+                                    <p className="text-white font-medium">{t.serviceName || 'Servicio'}</p>
+                                    <p className="text-[10px] text-white/40">{t.date.toLocaleString()} • <span className="text-yellow-500/80">{t.paymentMethod || 'Efectivo'}</span></p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="font-mono text-emerald-200">S/. {t.price}</span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={() => startEdit(t)}
+                                            className="p-1.5 hover:bg-white/10 rounded-lg text-white/50 hover:text-yellow-500 transition-colors"
+                                            title="Editar"
+                                        >
+                                            <Edit2 className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                            onClick={() => onDelete(t.id)}
+                                            className="p-1.5 hover:bg-red-500/10 rounded-lg text-white/50 hover:text-red-400 transition-colors"
+                                            title="Eliminar"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 ))}
             </div>

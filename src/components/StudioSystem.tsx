@@ -1710,41 +1710,40 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
                         <p className="text-xs text-white/40 text-center mb-6 uppercase tracking-widest">Historial de Servicios</p>
 
                         <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                            <div className="space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                                <ReportListBlock
-                                    title="Hoy"
-                                    transactions={transactions.filter((t: Transaction) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)}
-                                    onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)}
-                                    onEdit={handleEditTransaction}
-                                    onDelete={handleDeleteTransaction}
-                                />
-                                <ReportListBlock
-                                    title="Esta Semana"
-                                    transactions={transactions.filter((t: Transaction) => {
-                                        const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                        const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
-                                        return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
-                                    })}
-                                    onSend={() => sendDetailedWhatsApp("Semanal", transactions.filter((t: any) => {
-                                        const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                        const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
-                                        return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
-                                    }), selectedRepEmp.name, selectedRepEmp.commission)}
-                                    onEdit={handleEditTransaction}
-                                    onDelete={handleDeleteTransaction}
-                                />
-                                <ReportListBlock
-                                    title="Este Mes"
-                                    transactions={transactions.filter((t: Transaction) => {
-                                        const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
-                                    })}
-                                    onSend={() => sendDetailedWhatsApp("Mensual", transactions.filter((t: any) => {
-                                        const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
-                                    }), selectedRepEmp.name, selectedRepEmp.commission)}
-                                    onEdit={handleEditTransaction}
-                                    onDelete={handleDeleteTransaction}
-                                />
-                            </div>
+                            <ReportListBlock
+                                title="Hoy"
+                                transactions={transactions.filter((t: Transaction) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id)}
+                                onSend={() => sendDetailedWhatsApp("Diario", transactions.filter((t: any) => t.date >= new Date(new Date().setHours(0, 0, 0, 0)) && t.employeeId === selectedRepEmp.id), selectedRepEmp.name, selectedRepEmp.commission)}
+                                onEdit={handleEditTransaction}
+                                onDelete={handleDeleteTransaction}
+                            />
+                            <ReportListBlock
+                                title="Esta Semana"
+                                transactions={transactions.filter((t: Transaction) => {
+                                    const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                    const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
+                                    return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                                })}
+                                onSend={() => sendDetailedWhatsApp("Semanal", transactions.filter((t: any) => {
+                                    const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                    const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
+                                    return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                                }), selectedRepEmp.name, selectedRepEmp.commission)}
+                                onEdit={handleEditTransaction}
+                                onDelete={handleDeleteTransaction}
+                            />
+                            <ReportListBlock
+                                title="Este Mes"
+                                transactions={transactions.filter((t: Transaction) => {
+                                    const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
+                                })}
+                                onSend={() => sendDetailedWhatsApp("Mensual", transactions.filter((t: any) => {
+                                    const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
+                                }), selectedRepEmp.name, selectedRepEmp.commission)}
+                                onEdit={handleEditTransaction}
+                                onDelete={handleDeleteTransaction}
+                            />
+                        </div>
                     </Modal>
                 )}
             </AnimatePresence>

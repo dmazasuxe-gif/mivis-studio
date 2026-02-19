@@ -5,7 +5,7 @@ import {
     Users, Plus, Trash2, ChevronRight, DollarSign,
     TrendingUp, X, Settings, Wallet,
     ArrowDownCircle, ArrowUpCircle, Camera, RotateCcw,
-    Calendar, Clock, CheckCircle2, Lock, LogOut, Store, Send, Printer, AlertTriangle, Edit2, FileText
+    Calendar, Clock, CheckCircle2, Lock, LogOut, Store, Send, Printer, AlertTriangle, Edit2, FileText, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Playfair_Display, Inter } from 'next/font/google';
@@ -112,6 +112,12 @@ export default function StudioSystem() {
     const [addItemEmp, setAddItemEmp] = useState('');
     const [addItemPrice, setAddItemPrice] = useState('');
     const [posClientName, setPosClientName] = useState<string | null>(null); // To store client name for POS header
+
+    // Quick Check-in State
+    const [showQuickCheckIn, setShowQuickCheckIn] = useState(false);
+    const [quickEmp, setQuickEmp] = useState<Employee | null>(null);
+    const [quickClient, setQuickClient] = useState('');
+    const [quickService, setQuickService] = useState('');
 
     // Voice Alert State
 
@@ -248,6 +254,32 @@ export default function StudioSystem() {
             setPinError(true);
             setPinInput("");
             setTimeout(() => setPinError(false), 1000);
+        }
+    };
+
+    const handleQuickCheckIn = async () => {
+        if (!quickEmp || !quickClient || !quickService) return alert("Completa todos los datos");
+
+        try {
+            await addDoc(collection(db, "bookings"), {
+                clientName: quickClient,
+                clientPhone: '', // Walk-in usually doesn't need phone immediately
+                service: quickService,
+                professionalId: quickEmp.id,
+                date: new Date(),
+                status: 'confirmed',
+                paymentMethod: 'PENDING',
+                description: 'Cliente Eventual (Walk-in)',
+                isPaid: false
+            });
+            setShowQuickCheckIn(false);
+            setQuickClient('');
+            setQuickService('');
+            setQuickEmp(null);
+            alert("✅ Atención iniciada exitosamente");
+        } catch (e) {
+            console.error(e);
+            alert("Error al iniciar atención");
         }
     };
 
@@ -861,10 +893,20 @@ export default function StudioSystem() {
                                                     );
                                                 }
                                                 return (
-                                                    <div className="bg-emerald-500/10 rounded-xl p-3 text-center border border-emerald-500/20">
-                                                        <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center justify-center gap-2">
-                                                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                    <div
+                                                        onClick={() => {
+                                                            setQuickEmp(emp);
+                                                            setShowQuickCheckIn(true);
+                                                        }}
+                                                        className="bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl p-3 text-center border border-emerald-500/20 cursor-pointer group/available transition-all active:scale-95"
+                                                    >
+                                                        <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center justify-center gap-2 group-hover/available:text-emerald-300">
+                                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                                             Disponible
+                                                        </p>
+                                                        <p className="text-[10px] text-emerald-400/60 mt-1 flex items-center justify-center gap-1 opacity-0 group-hover/available:opacity-100 transition-opacity">
+                                                            <Zap className="w-3 h-3" />
+                                                            Ocupar Manualmente
                                                         </p>
                                                     </div>
                                                 );
@@ -1339,6 +1381,50 @@ export default function StudioSystem() {
                             </div>
                         </Modal>
                     )}
+
+                    {/* MODAL ATENCIÓN RÁPIDA (WALK-IN) */}
+                    {showQuickCheckIn && quickEmp && (
+                        <Modal onClose={() => setShowQuickCheckIn(false)}>
+                            <div className="text-center mb-6">
+                                <h3 className={`${playfair.className} text-2xl text-yellow-500`}>Nueva Atención</h3>
+                                <p className="text-emerald-100/60 text-sm">Asignar a {quickEmp.name}</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Servicio</label>
+                                    <select
+                                        className="input-modern w-full appearance-none"
+                                        value={quickService}
+                                        onChange={e => setQuickService(e.target.value)}
+                                        autoFocus
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        {services.map(s => <option key={s.id} value={s.name} className="bg-black">{s.name}</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nombre del Cliente</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Ej. María Pérez"
+                                        className="input-modern"
+                                        value={quickClient}
+                                        onChange={e => setQuickClient(e.target.value)}
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={handleQuickCheckIn}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/40 transition-all flex items-center justify-center gap-2 mt-4"
+                                >
+                                    <Zap className="w-5 h-5 text-yellow-300" />
+                                    Iniciar Atención
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
                 </AnimatePresence>
             </main >
             <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div >
@@ -1779,6 +1865,38 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
                                 </div>
                             )
                         })}
+                        {/* UNASSIGNED / DELETED EMPLOYEES */}
+                        {(() => {
+                            const periodTrans = transactions.filter(t => t.date >= start && t.date <= end);
+                            const unassignedTrans = periodTrans.filter(t => !employees.some(e => e.id === t.employeeId));
+                            if (unassignedTrans.length > 0) {
+                                const totalUn = unassignedTrans.reduce((s, t) => s + t.price, 0);
+                                return (
+                                    <div className="grid grid-cols-4 p-4 items-center bg-red-500/5 hover:bg-red-500/10 transition-colors">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50"><AlertTriangle className="w-4 h-4" /></div>
+                                            <div className="truncate text-sm font-bold text-white/50 italic">Otros / Ex-staff</div>
+                                        </div>
+                                        <div className="text-right font-mono text-sm text-white/70">{totalUn.toFixed(2)}</div>
+                                        <div className="text-right font-mono text-sm text-white/30">-</div>
+                                        <div className="text-right font-mono text-sm text-yellow-500 font-bold">{totalUn.toFixed(2)}</div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                        {/* TOTAL FOOTER */}
+                        {(() => {
+                            const periodTrans = transactions.filter(t => t.date >= start && t.date <= end);
+                            const totalAll = periodTrans.reduce((s, t) => s + t.price, 0);
+                            return (
+                                <div className="grid grid-cols-4 p-4 items-center bg-white/10 font-bold border-t border-white/10">
+                                    <div className="text-sm uppercase tracking-widest text-yellow-500">Total</div>
+                                    <div className="text-right font-mono text-white">S/. {totalAll.toFixed(2)}</div>
+                                    <div className="col-span-2"></div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             ) : (

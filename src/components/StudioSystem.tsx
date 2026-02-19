@@ -103,6 +103,10 @@ export default function StudioSystem() {
     const [showPos, setShowPos] = useState(false);
     const [posCart, setPosCart] = useState<{ id: string, service: string, emplId: string, emplName: string, price: number }[]>([]);
     const [posMethod, setPosMethod] = useState(PAY_METHODS[0]);
+    // Split Payment State for POS
+    const [isPosSplit, setIsPosSplit] = useState(false);
+    const [posSplitDetails, setPosSplitDetails] = useState<{ method: string, amount: number }[]>([]);
+
     // Inputs para agregar items al carrito
     const [addItemServ, setAddItemServ] = useState('');
     const [addItemEmp, setAddItemEmp] = useState('');
@@ -308,36 +312,84 @@ export default function StudioSystem() {
 
     const handlePOSCheckout = async () => {
         if (posCart.length === 0) return;
-
         const total = posCart.reduce((s, i) => s + i.price, 0);
 
-        // 1. Guardar Transacciones
-        for (const item of posCart) {
-            await addDoc(collection(db, "transactions"), {
-                employeeId: item.emplId,
-                serviceName: item.service,
-                price: item.price,
-                date: new Date(),
-                paymentMethod: posMethod
-            });
+        // Validate Split Payment
+        if (isPosSplit) {
+            const splitTotal = posSplitDetails.reduce((s, x) => s + x.amount, 0);
+            if (Math.abs(splitTotal - total) > 0.5) return alert(`El total dividido (S/.${splitTotal}) no coincide con el total de la venta (S/.${total})`);
         }
 
-        // 2. Alerta de Voz (Resumen)
-        // Agrupar por trabajador para la alerta
-        const workersInvolved = Array.from(new Set(posCart.map(i => i.emplName)));
-        const msg = `Venta registrada con éxito. Atención, ${workersInvolved.join(' y ')} han terminado servicio y están disponibles.`;
+        try {
+            if (isPosSplit) {
+                // Create fractional transactions for split parts
+                // We distribute the split payments across the items "virtually" just to create valid transaction records.
+                // Actually, simpler: We create ONE transaction record per item, BUT we tag them with "MIXTO" method,
+                // AND we create separate "Adjustment/Detail" records? No that pollutes reports.
 
-        const utterance = new SpeechSynthesisUtterance(msg);
-        utterance.lang = 'es-ES';
-        utterance.volume = 1.0;
-        utterance.pitch = 1.1;
-        window.speechSynthesis.speak(utterance);
+                // BEST APPROACH FOR NOW: 
+                // We create transactions for each item as usual, but we set the Payment Method to "Múltiple".
+                // Then we create "Financial Entries" for the specific cash/yape breakdown?
+                // The system uses 'transactions' for everything.
 
-        // 3. Reset
-        setPosCart([]);
-        setAddItemServ(''); setAddItemEmp(''); setAddItemPrice('');
-        setShowPos(false);
-        alert(`✅ Cobro de S/. ${total} registrado exitosamente.`);
+                // Let's create transactions for the items but SPLIT them?
+                // Item 1 (100). Split: 50 Cash, 50 Yape.
+                // Create Transaction 1: Item 1 (Parte Efectivo) - S/. 50 - Method: Efectivo
+                // Create Transaction 2: Item 1 (Parte Yape) - S/. 50 - Method: Yape.
+
+                const totalAmount = posCart.reduce((s, i) => s + i.price, 0);
+
+                for (const item of posCart) {
+                    const itemWeight = item.price / totalAmount; // percentage of total this item represents (e.g. 0.5)
+
+                    for (const split of posSplitDetails) {
+                        const amountForThisItem = split.amount * itemWeight; // e.g. 50 * 0.5 = 25
+
+                        if (amountForThisItem > 0.01) {
+                            await addDoc(collection(db, "transactions"), {
+                                serviceName: `${item.service} (${split.method})`,
+                                price: parseFloat(amountForThisItem.toFixed(2)),
+                                paymentMethod: split.method,
+                                date: new Date(),
+                                employeeId: item.emplId,
+                                type: 'income',
+                                isSplit: true,
+                                originalService: item.service
+                            });
+                        }
+                    }
+                }
+            } else {
+                // Standard Single Method
+                for (const item of posCart) {
+                    await addDoc(collection(db, "transactions"), {
+                        serviceName: item.service,
+                        price: item.price,
+                        paymentMethod: posMethod,
+                        date: new Date(),
+                        employeeId: item.emplId,
+                        type: 'income'
+                    });
+                }
+            }
+
+            // Speak Summary
+            const workersInvolved = Array.from(new Set(posCart.map(i => i.emplName)));
+            const utterance = new SpeechSynthesisUtterance(`Cobro exitoso de ${total.toFixed(2)} soles. Gracias ${workersInvolved.join(' y ')}.`);
+            utterance.lang = 'es-ES';
+            window.speechSynthesis.speak(utterance);
+
+            // Reset
+            setPosCart([]);
+            setShowPos(false); // Close Modal
+            setIsPosSplit(false);
+            setPosSplitDetails([]);
+            setAddItemServ(''); setAddItemEmp(''); setAddItemPrice('');
+            alert(`✅ Cobro de S/. ${total.toFixed(2)} registrado exitosamente.`);
+        } catch (e) {
+            console.error(e);
+            alert("Error al procesar la venta");
+        }
     };
 
     const updateCartItemPrice = (id: string, newPrice: string) => {
@@ -542,6 +594,9 @@ export default function StudioSystem() {
                                             <button
                                                 onClick={async () => {
                                                     if (confirm(`¿Terminaste con ${b.clientName}?`)) {
+                                                        const utterance = new SpeechSynthesisUtterance(`${currentWorker.name} terminó su servicio, no se olvide de cobrar el servicio.`);
+                                                        utterance.lang = 'es-ES';
+                                                        window.speechSynthesis.speak(utterance);
                                                         await updateDoc(doc(db, "bookings", b.id), { status: 'completed' });
                                                     }
                                                 }}
@@ -687,9 +742,6 @@ export default function StudioSystem() {
                                                         <p className="text-xs text-white/50">{emp.role}</p>
                                                     </div>
                                                     <div className="ml-auto flex flex-col gap-2">
-                                                        <button onClick={(e) => { e.stopPropagation(); setCurrentWorker(emp); setView('WORKER_DASHBOARD'); }} className="bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400 p-2 rounded-full transition-colors border border-emerald-500/30" aria-label="Ver perfil">
-                                                            <ChevronRight className="w-5 h-5" />
-                                                        </button>
                                                         <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-500/10 transition-colors" aria-label="Eliminar empleado">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
@@ -705,14 +757,30 @@ export default function StudioSystem() {
 
                                                 if (currentBooking) {
                                                     return (
-                                                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-sm relative overflow-hidden">
+                                                        <div
+                                                            onClick={() => {
+                                                                // Open POS pre-filled with this client's service
+                                                                const serviceData = services.find(s => s.name === currentBooking.service);
+                                                                const price = serviceData ? serviceData.price : 0;
+                                                                setPosCart([{
+                                                                    id: Math.random().toString(36),
+                                                                    service: currentBooking.service,
+                                                                    emplId: emp.id,
+                                                                    emplName: emp.name,
+                                                                    price: price
+                                                                }]);
+                                                                setShowPos(true);
+                                                            }}
+                                                            className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-center animate-in zoom-in-95 shadow-sm relative overflow-hidden cursor-pointer hover:bg-red-500/20 transition-colors group/occupied"
+                                                        >
                                                             <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                                                            <div className="absolute top-2 right-2 opacity-0 group-hover/occupied:opacity-100 transition-opacity bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Cobrar</div>
                                                             <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
                                                                 <span className="relative flex h-2 w-2">
                                                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                                                                 </span>
-                                                                OCUPADO
+                                                                OCUPADO - CLICK PARA COBRAR
                                                             </p>
                                                             <p className="text-lg font-black text-white leading-tight truncate">{currentBooking.clientName}</p>
                                                             <p className="text-xs font-medium text-white/70">{currentBooking.service}</p>
@@ -850,13 +918,54 @@ export default function StudioSystem() {
                             </div>
 
                             <label className="text-xs text-white/40 uppercase font-bold block mb-2">Método de Pago</label>
-                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-                                {ADMIN_PAY_METHODS.map(pm => (
-                                    <button key={pm} onClick={() => setPosMethod(pm)} className={`flex-1 px-3 py-3 rounded-xl text-xs font-bold border transition-all ${posMethod === pm ? 'bg-yellow-500 text-black border-yellow-500 shadow-lg' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
-                                        {pm}
-                                    </button>
-                                ))}
+
+                            <div className="flex items-center gap-2 mb-4">
+                                <button onClick={() => { setIsPosSplit(!isPosSplit); setPosSplitDetails([]); }} className={`text-xs px-3 py-1 rounded-full border ${isPosSplit ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-transparent text-white/50 border-white/20'}`}>
+                                    🔀 Dividir Pago
+                                </button>
                             </div>
+
+                            {!isPosSplit ? (
+                                <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+                                    {ADMIN_PAY_METHODS.map(pm => (
+                                        <button key={pm} onClick={() => setPosMethod(pm)} className={`flex-1 min-w-[80px] px-3 py-3 rounded-xl text-xs font-bold border transition-all ${posMethod === pm ? 'bg-yellow-500 text-black border-yellow-500 shadow-lg' : 'text-white/40 border-white/10 hover:border-white/30'}`}>
+                                            {pm}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-2 mb-6 bg-white/5 p-4 rounded-xl border border-white/10">
+                                    {ADMIN_PAY_METHODS.map(pm => {
+                                        const currentVal = posSplitDetails.find(d => d.method === pm)?.amount || '';
+                                        return (
+                                            <div key={pm} className="flex justify-between items-center">
+                                                <span className="text-xs font-bold text-white/60 w-24">{pm}</span>
+                                                <div className="flex items-center gap-2 flex-1 bg-black/30 rounded-lg px-3 border border-white/5">
+                                                    <span className="text-yellow-500 text-xs">S/.</span>
+                                                    <input
+                                                        type="number"
+                                                        className="bg-transparent w-full py-2 text-right text-sm font-mono focus:outline-none"
+                                                        placeholder="0.00"
+                                                        value={currentVal}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value) || 0;
+                                                            const others = posSplitDetails.filter(d => d.method !== pm);
+                                                            if (val > 0) others.push({ method: pm, amount: val });
+                                                            setPosSplitDetails(others);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                    <div className="flex justify-between pt-2 border-t border-white/10 mt-2">
+                                        <span className="text-xs font-bold text-emerald-400">Total Ingresado:</span>
+                                        <span className={`text-sm font-bold font-mono ${Math.abs(posSplitDetails.reduce((s, x) => s + x.amount, 0) - posCart.reduce((s, i) => s + i.price, 0)) < 0.1 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            S/. {posSplitDetails.reduce((s, x) => s + x.amount, 0).toFixed(2)}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
 
                             <button onClick={handlePOSCheckout} disabled={posCart.length === 0} className="btn-primary w-full py-4 text-lg flex justify-center gap-2 disabled:opacity-50 disabled:grayscale">
                                 <DollarSign className="w-6 h-6" /> Procesar Venta

@@ -1754,8 +1754,29 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
             });
 
             htmlContent += `<tr class="total-row"><td colspan="3" align="right">TOTAL:</td><td>S/. ${total.toFixed(2)}</td></tr>
-            <tr class="total-row"><td colspan="3" align="right">PAGO:</td><td>S/. ${pay.toFixed(2)}</td></tr></tbody></table></div>`;
+            <tr class="total-row"><td colspan="3" align="right">PAGO (COM):</td><td>S/. ${pay.toFixed(2)}</td></tr></tbody></table></div>`;
         });
+
+        // Add Payment Methods Summary at the end of PDF
+        const monthTrans = transactions.filter((t: Transaction) => t.date >= monthStart && t.date <= monthEnd);
+        const totalMonth = monthTrans.reduce((s, t) => s + t.price, 0);
+
+        htmlContent += `<div class="emp-card"><div class="emp-header">RESUMEN DE CAJA POR PAGO</div>
+        <table><thead><tr><th>Tipo de Pago</th><th>Monto Total</th></tr></thead><tbody>`;
+
+        ADMIN_PAY_METHODS.forEach(method => {
+            const mTotal = monthTrans.filter(t => t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')).reduce((s, t) => s + t.price, 0);
+            if (mTotal > 0) {
+                htmlContent += `<tr><td>${method}</td><td>S/. ${mTotal.toFixed(2)}</td></tr>`;
+            }
+        });
+
+        const otherTotal = monthTrans.filter(t => t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod)).reduce((s, t) => s + t.price, 0);
+        if (otherTotal > 0) {
+            htmlContent += `<tr><td>OTROS</td><td>S/. ${otherTotal.toFixed(2)}</td></tr>`;
+        }
+
+        htmlContent += `<tr class="total-row"><td align="right">TOTAL CAJA MENSUAL:</td><td>S/. ${totalMonth.toFixed(2)}</td></tr></tbody></table></div>`;
 
         htmlContent += `<script>window.print();</script></body></html>`;
 
@@ -1843,6 +1864,55 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
             </div>
 
             <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="w-5 h-5" /></button></div>
+
+            {/* 💰 RESUMEN POR TIPO DE PAGO */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                        <Wallet className="w-5 h-5 text-yellow-500" />
+                        <h3 className="font-bold text-emerald-200 uppercase tracking-widest text-xs">Resumen de Caja por Tipo de Pago</h3>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                    {ADMIN_PAY_METHODS.map(method => {
+                        const methodTotal = transactions
+                            .filter(t => t.date >= start && t.date <= end && (t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')))
+                            .reduce((sum, t) => sum + t.price, 0);
+
+                        if (methodTotal === 0) return null;
+
+                        return (
+                            <div key={method} className="bg-black/20 p-3 rounded-xl border border-white/5 hover:border-yellow-500/30 transition-colors">
+                                <p className="text-[10px] text-white/40 uppercase font-bold mb-1 tracking-tighter">{method}</p>
+                                <p className="font-mono text-emerald-400 font-bold">S/. {methodTotal.toFixed(2)}</p>
+                            </div>
+                        );
+                    })}
+
+                    {/* Caso Otros / Métodos no especificados */}
+                    {(() => {
+                        const otherTotal = transactions
+                            .filter(t => t.date >= start && t.date <= end && t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod))
+                            .reduce((sum, t) => sum + t.price, 0);
+
+                        if (otherTotal <= 0) return null;
+
+                        return (
+                            <div key="otros" className="bg-black/20 p-3 rounded-xl border border-white/5">
+                                <p className="text-[10px] text-white/40 uppercase font-bold mb-1">Otros</p>
+                                <p className="font-mono text-emerald-400 font-bold">S/. {otherTotal.toFixed(2)}</p>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Total General de Caja */}
+                    <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 col-span-2 sm:col-span-1 border-dashed">
+                        <p className="text-[10px] text-emerald-500 uppercase font-bold mb-1">Total Caja</p>
+                        <p className="font-mono text-white font-bold text-lg">S/. {transactions.filter(t => t.date >= start && t.date <= end).reduce((s, t) => s + t.price, 0).toFixed(2)}</p>
+                    </div>
+                </div>
+            </div>
 
             {tab === 'month' ? (
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">

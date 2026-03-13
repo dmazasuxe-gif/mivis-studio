@@ -1587,33 +1587,47 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
     const [amt, setAmt] = useState('');
     const [desc, setDesc] = useState('');
     const [cat, setCat] = useState(EXPENSE_CATS[0]);
-    const [historyPeriod, setHistoryPeriod] = useState<'week' | 'month'>('week'); // Default to weekly as requested
+    const [historyPeriod, setHistoryPeriod] = useState<'week' | 'month'>('week');
+    const [offset, setOffset] = useState(0); // Added for navigation
     
     const now = new Date();
     
-    // Helpers
-    const isCurrentMonth = (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    const isCurrentWeek = (d: Date) => {
-        const d_copy = new Date(now);
-        d_copy.setHours(0, 0, 0, 0);
-        const day = d_copy.getDay();
-        const diff = d_copy.getDate() - day + (day === 0 ? -6 : 1); // Start of week (Monday)
-        const ws = new Date(d_copy);
-        ws.setDate(diff);
-        const we = new Date(ws);
-        we.setDate(ws.getDate() + 7);
-        return d >= ws && d < we;
+    // Range Calculation logic
+    const getRange = () => {
+        const d = new Date(now);
+        d.setHours(0, 0, 0, 0);
+        let start = new Date(d);
+        let end = new Date(d);
+
+        if (historyPeriod === 'week') {
+            const currentDay = d.getDay();
+            const diff = d.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + (offset * 7);
+            start.setDate(diff);
+            end = new Date(start);
+            end.setDate(start.getDate() + 7);
+        } else {
+            start.setMonth(start.getMonth() + offset);
+            start.setDate(1);
+            end = new Date(start);
+            end.setMonth(end.getMonth() + 1);
+            end.setDate(0);
+            end.setHours(23, 59, 59, 999);
+        }
+        return { start, end };
     };
 
-    const monthlyIncome = transactions.filter((t: Transaction) => isCurrentMonth(t.date)).reduce((acc: number, t: Transaction) => acc + t.price, 0);
-    const monthlyExpenses = expenses.filter((e: SimpleExpense) => isCurrentMonth(e.date)).reduce((acc: number, e: SimpleExpense) => acc + e.amount, 0);
+    const { start, end } = getRange();
 
-    const weeklyIncome = transactions.filter((t: Transaction) => isCurrentWeek(t.date)).reduce((acc: number, t: Transaction) => acc + t.price, 0);
-    const weeklyExpenses = expenses.filter((e: SimpleExpense) => isCurrentWeek(e.date)).reduce((acc: number, e: SimpleExpense) => acc + e.amount, 0);
-
-    const activeIncome = historyPeriod === 'month' ? monthlyIncome : weeklyIncome;
-    const activeExpenses = historyPeriod === 'month' ? monthlyExpenses : weeklyExpenses;
+    const activeIncome = transactions.filter((t: Transaction) => t.date >= start && t.date < end).reduce((acc: number, t: Transaction) => acc + t.price, 0);
+    const activeExpenses = expenses.filter((e: SimpleExpense) => e.date >= start && e.date < end).reduce((acc: number, e: SimpleExpense) => acc + e.amount, 0);
     const profit = activeIncome - activeExpenses;
+
+    let rangeLabel = "";
+    if (historyPeriod === 'week') {
+        rangeLabel = `${start.getDate()} - ${new Date(new Date(end).setDate(end.getDate()-1)).getDate()} ${start.toLocaleDateString('es-PE', { month: 'short' })}`;
+    } else {
+        rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+    }
 
     const handleSaveExpense = () => {
         if (!amt) return;
@@ -1627,19 +1641,29 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                 <div className="flex flex-col gap-1">
                     <h2 className={`text-3xl text-yellow-500 ${playfair.className}`}>
-                        Finanzas: {historyPeriod === 'month' ? now.toLocaleDateString('es-PE', { month: 'long' }) : 'Esta Semana'}
+                        Finanzas: {historyPeriod === 'month' ? start.toLocaleDateString('es-PE', { month: 'long' }) : 'Historial'}
                     </h2>
                     <p className="text-[10px] text-white/40 uppercase tracking-[0.2em]">Vista {historyPeriod === 'month' ? 'Mensual' : 'Semanal'}</p>
                 </div>
                 <div className="flex gap-2">
                     <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
-                        <button onClick={() => setHistoryPeriod('week')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'week' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Semana</button>
-                        <button onClick={() => setHistoryPeriod('month')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'month' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Mes</button>
+                        <button onClick={() => { setHistoryPeriod('week'); setOffset(0); }} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'week' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Semana</button>
+                        <button onClick={() => { setHistoryPeriod('month'); setOffset(0); }} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'month' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Mes</button>
                     </div>
                     <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
                         <RotateCcw className="w-3 h-3" /> Reset
                     </button>
                 </div>
+            </div>
+
+            {/* Navigation Arrows */}
+            <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5 mb-6">
+                <button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronRight className="rotate-180 w-5 h-5 text-emerald-400" /></button>
+                <div className="flex flex-col items-center">
+                    <span className="font-playfair text-xl capitalize min-w-[200px] text-center text-white">{rangeLabel}</span>
+                    {offset !== 0 && <button onClick={() => setOffset(0)} className="text-[10px] text-yellow-500/60 hover:text-yellow-500 uppercase font-bold tracking-widest mt-1">Volver a Hoy</button>}
+                </div>
+                <button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronRight className="w-5 h-5 text-emerald-400" /></button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1671,12 +1695,12 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
                 </div>
 
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col max-h-[500px]">
-                    <h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0 flex justify-between items-center">
-                        Historial ({historyPeriod === 'month' ? 'Mes Actual' : 'Semana Actual'})
-                        {historyPeriod === 'week' && <span className="text-[10px] text-emerald-400/60 lowercase font-normal italic">Mostrando gastos de la semana</span>}
+                    <h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0 flex justify-between items-center bg-[#132f29]/90 backdrop-blur-sm z-10 py-1">
+                        Historial {historyPeriod === 'week' ? '(Semana)' : '(Mes)'}
+                        <span className="text-[10px] text-emerald-400/60 lowercase font-normal italic">Mostrando {rangeLabel}</span>
                     </h3>
                     <div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-2">
-                        {[...expenses].filter((e: SimpleExpense) => historyPeriod === 'month' ? isCurrentMonth(e.date) : isCurrentWeek(e.date)).sort((a: SimpleExpense, b: SimpleExpense) => b.date.getTime() - a.date.getTime()).map((exp: SimpleExpense) => (
+                        {[...expenses].filter((e: SimpleExpense) => e.date >= start && e.date < end).sort((a: SimpleExpense, b: SimpleExpense) => b.date.getTime() - a.date.getTime()).map((exp: SimpleExpense) => (
                             <div key={exp.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors group">
                                 <div>
                                     <p className="font-bold text-rose-300">{exp.category}</p>

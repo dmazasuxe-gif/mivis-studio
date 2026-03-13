@@ -920,9 +920,9 @@ export default function StudioSystem() {
                                                         <button
                                                             key={s.id}
                                                             onClick={() => {
-                                                                // Open Global POS with this item pre-filled
-                                                                setPosCart([{ id: Math.random().toString(36), service: s.name, emplId: emp.id, emplName: emp.name, price: 0 }]);
-                                                                setShowPos(true);
+                                                                // Open Global POS with this item appended
+                                                                setPosCart(prev => [...prev, { id: Math.random().toString(36), service: s.name, emplId: emp.id, emplName: emp.name, price: 0 }]);
+                                                                if (!showPos) setShowPos(true);
                                                             }}
                                                             className="bg-white/20 hover:bg-white/40 text-left p-2 rounded-lg text-xs font-bold transition-colors leading-tight truncate border border-transparent hover:border-black/5"
                                                         >
@@ -932,8 +932,8 @@ export default function StudioSystem() {
                                                     <button onClick={() => {
                                                         const custom = prompt("Servicio Eventual:");
                                                         if (custom) {
-                                                            setPosCart([{ id: Math.random().toString(36), service: custom, emplId: emp.id, emplName: emp.name, price: 0 }]);
-                                                            setShowPos(true);
+                                                            setPosCart(prev => [...prev, { id: Math.random().toString(36), service: custom, emplId: emp.id, emplName: emp.name, price: 0 }]);
+                                                            if (!showPos) setShowPos(true);
                                                         }
                                                     }}
                                                         className="bg-black/5 hover:bg-black/10 border border-black/5 border-dashed p-2 rounded-lg text-xs font-bold text-center flex items-center justify-center text-black/40 hover:text-black/60"
@@ -1587,12 +1587,33 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
     const [amt, setAmt] = useState('');
     const [desc, setDesc] = useState('');
     const [cat, setCat] = useState(EXPENSE_CATS[0]);
+    const [historyPeriod, setHistoryPeriod] = useState<'week' | 'month'>('week'); // Default to weekly as requested
+    
     const now = new Date();
+    
+    // Helpers
     const isCurrentMonth = (d: Date) => d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const isCurrentWeek = (d: Date) => {
+        const d_copy = new Date(now);
+        d_copy.setHours(0, 0, 0, 0);
+        const day = d_copy.getDay();
+        const diff = d_copy.getDate() - day + (day === 0 ? -6 : 1); // Start of week (Monday)
+        const ws = new Date(d_copy);
+        ws.setDate(diff);
+        const we = new Date(ws);
+        we.setDate(ws.getDate() + 7);
+        return d >= ws && d < we;
+    };
 
     const monthlyIncome = transactions.filter((t: Transaction) => isCurrentMonth(t.date)).reduce((acc: number, t: Transaction) => acc + t.price, 0);
     const monthlyExpenses = expenses.filter((e: SimpleExpense) => isCurrentMonth(e.date)).reduce((acc: number, e: SimpleExpense) => acc + e.amount, 0);
-    const profit = monthlyIncome - monthlyExpenses;
+
+    const weeklyIncome = transactions.filter((t: Transaction) => isCurrentWeek(t.date)).reduce((acc: number, t: Transaction) => acc + t.price, 0);
+    const weeklyExpenses = expenses.filter((e: SimpleExpense) => isCurrentWeek(e.date)).reduce((acc: number, e: SimpleExpense) => acc + e.amount, 0);
+
+    const activeIncome = historyPeriod === 'month' ? monthlyIncome : weeklyIncome;
+    const activeExpenses = historyPeriod === 'month' ? monthlyExpenses : weeklyExpenses;
+    const profit = activeIncome - activeExpenses;
 
     const handleSaveExpense = () => {
         if (!amt) return;
@@ -1604,15 +1625,26 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                <h2 className={`text-3xl text-yellow-500 ${playfair.className}`}>Finanzas: {now.toLocaleDateString('es-PE', { month: 'long' })}</h2>
-                <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
-                    <RotateCcw className="w-3 h-3" /> Reset
-                </button>
+                <div className="flex flex-col gap-1">
+                    <h2 className={`text-3xl text-yellow-500 ${playfair.className}`}>
+                        Finanzas: {historyPeriod === 'month' ? now.toLocaleDateString('es-PE', { month: 'long' }) : 'Esta Semana'}
+                    </h2>
+                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em]">Vista {historyPeriod === 'month' ? 'Mensual' : 'Semanal'}</p>
+                </div>
+                <div className="flex gap-2">
+                    <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+                        <button onClick={() => setHistoryPeriod('week')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'week' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Semana</button>
+                        <button onClick={() => setHistoryPeriod('month')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'month' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Mes</button>
+                    </div>
+                    <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
+                        <RotateCcw className="w-3 h-3" /> Reset
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard label="Ingresos" val={monthlyIncome} icon={<ArrowDownCircle />} color="text-emerald-400" bg="bg-emerald-500/10" />
-                <StatCard label="Gastos" val={monthlyExpenses} icon={<ArrowUpCircle />} color="text-rose-400" bg="bg-rose-500/10" />
+                <StatCard label="Ingresos" val={activeIncome} icon={<ArrowDownCircle />} color="text-emerald-400" bg="bg-emerald-500/10" />
+                <StatCard label="Gastos" val={activeExpenses} icon={<ArrowUpCircle />} color="text-rose-400" bg="bg-rose-500/10" />
                 <StatCard label="Caja Neta" val={profit} icon={<Wallet />} color={profit >= 0 ? "text-white" : "text-red-400"} bg={profit >= 0 ? "bg-white/10" : "bg-red-500/10"} />
             </div>
 
@@ -1639,9 +1671,12 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
                 </div>
 
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col max-h-[500px]">
-                    <h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0">Historial (Mes Actual)</h3>
+                    <h3 className="text-xs font-bold text-white/40 uppercase mb-4 sticky top-0 flex justify-between items-center">
+                        Historial ({historyPeriod === 'month' ? 'Mes Actual' : 'Semana Actual'})
+                        {historyPeriod === 'week' && <span className="text-[10px] text-emerald-400/60 lowercase font-normal italic">Mostrando gastos de la semana</span>}
+                    </h3>
                     <div className="overflow-y-auto flex-1 custom-scrollbar space-y-2 pr-2">
-                        {[...expenses].filter((e: SimpleExpense) => isCurrentMonth(e.date)).sort((a: SimpleExpense, b: SimpleExpense) => b.date.getTime() - a.date.getTime()).map((exp: SimpleExpense) => (
+                        {[...expenses].filter((e: SimpleExpense) => historyPeriod === 'month' ? isCurrentMonth(e.date) : isCurrentWeek(e.date)).sort((a: SimpleExpense, b: SimpleExpense) => b.date.getTime() - a.date.getTime()).map((exp: SimpleExpense) => (
                             <div key={exp.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-transparent hover:border-white/10 transition-colors group">
                                 <div>
                                     <p className="font-bold text-rose-300">{exp.category}</p>
@@ -1750,11 +1785,20 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
             <table><thead><tr><th>Fecha</th><th>Servicio</th><th>Pago</th><th>Monto</th></tr></thead><tbody>`;
 
             empTrans.sort((a: Transaction, b: Transaction) => a.date.getTime() - b.date.getTime()).forEach((t: Transaction) => {
-                htmlContent += `<tr><td>${t.date.toLocaleDateString()}</td><td>${t.serviceName}</td><td>${t.paymentMethod || '-'}</td><td>S/. ${t.price}</td></tr>`;
+                htmlContent += `<tr><td>${t.date.toLocaleDateString()}</td><td>${t.serviceName}</td><td>${t.paymentMethod || 'EFECTIVO'}</td><td>S/. ${t.price}</td></tr>`;
             });
 
-            htmlContent += `<tr class="total-row"><td colspan="3" align="right">TOTAL:</td><td>S/. ${total.toFixed(2)}</td></tr>
-            <tr class="total-row"><td colspan="3" align="right">PAGO (COM):</td><td>S/. ${pay.toFixed(2)}</td></tr></tbody></table></div>`;
+            htmlContent += `<tr class="total-row"><td colspan="3" align="right">TOTAL GENERADO:</td><td>S/. ${total.toFixed(2)}</td></tr>`;
+
+            // Employee Payment Breakdown in PDF
+            ADMIN_PAY_METHODS.forEach(method => {
+                const mTotal = empTrans.filter(t => t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')).reduce((s, t) => s + t.price, 0);
+                if (mTotal > 0) {
+                    htmlContent += `<tr><td colspan="3" align="right" style="color: #666; font-size: 10px;">${method}:</td><td style="color: #666; font-size: 10px;">S/. ${mTotal.toFixed(2)}</td></tr>`;
+                }
+            });
+
+            htmlContent += `<tr class="total-row" style="border-top: 1px solid #ccc;"><td colspan="3" align="right">A PAGAR (COM ${comm}%):</td><td>S/. ${pay.toFixed(2)}</td></tr></tbody></table></div>`;
         });
 
         // Add Payment Methods Summary at the end of PDF
@@ -1762,21 +1806,23 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
         const totalMonth = monthTrans.reduce((s, t) => s + t.price, 0);
 
         htmlContent += `<div class="emp-card"><div class="emp-header">RESUMEN DE CAJA POR PAGO</div>
-        <table><thead><tr><th>Tipo de Pago</th><th>Monto Total</th></tr></thead><tbody>`;
+        <table><thead><tr><th>Tipo de Pago</th><th>Servicios</th><th>Monto Total</th></tr></thead><tbody>`;
 
         ADMIN_PAY_METHODS.forEach(method => {
-            const mTotal = monthTrans.filter(t => t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')).reduce((s, t) => s + t.price, 0);
+            const mTrans = monthTrans.filter(t => t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO'));
+            const mTotal = mTrans.reduce((s, t) => s + t.price, 0);
             if (mTotal > 0) {
-                htmlContent += `<tr><td>${method}</td><td>S/. ${mTotal.toFixed(2)}</td></tr>`;
+                htmlContent += `<tr><td>${method}</td><td>${mTrans.length}</td><td>S/. ${mTotal.toFixed(2)}</td></tr>`;
             }
         });
 
-        const otherTotal = monthTrans.filter(t => t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod)).reduce((s, t) => s + t.price, 0);
+        const otherTrans = monthTrans.filter(t => t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod));
+        const otherTotal = otherTrans.reduce((s, t) => s + t.price, 0);
         if (otherTotal > 0) {
-            htmlContent += `<tr><td>OTROS</td><td>S/. ${otherTotal.toFixed(2)}</td></tr>`;
+            htmlContent += `<tr><td>OTROS</td><td>${otherTrans.length}</td><td>S/. ${otherTotal.toFixed(2)}</td></tr>`;
         }
 
-        htmlContent += `<tr class="total-row"><td align="right">TOTAL CAJA MENSUAL:</td><td>S/. ${totalMonth.toFixed(2)}</td></tr></tbody></table></div>`;
+        htmlContent += `<tr class="total-row"><td colspan="2" align="right">TOTAL CAJA MENSUAL:</td><td>S/. ${totalMonth.toFixed(2)}</td></tr></tbody></table></div>`;
 
         htmlContent += `<script>window.print();</script></body></html>`;
 
@@ -1866,50 +1912,55 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
             <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="w-5 h-5" /></button></div>
 
             {/* 💰 RESUMEN POR TIPO DE PAGO */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <Wallet className="w-5 h-5 text-yellow-500" />
-                        <h3 className="font-bold text-emerald-200 uppercase tracking-widest text-xs">Resumen de Caja por Tipo de Pago</h3>
-                    </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                <div className="bg-emerald-900/40 p-3 flex items-center gap-2 border-b border-white/5">
+                    <Wallet className="w-4 h-4 text-yellow-500" />
+                    <h3 className="font-bold text-emerald-200 uppercase tracking-widest text-[10px]">Resumen de Caja por Tipo de Pago</h3>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                <div className="grid grid-cols-3 bg-black/20 p-2 text-[10px] font-bold uppercase text-white/40 border-b border-white/5 px-4">
+                    <div>Método de Pago</div>
+                    <div className="text-center">Servicios</div>
+                    <div className="text-right">Monto Total</div>
+                </div>
+
+                <div className="divide-y divide-white/5">
                     {ADMIN_PAY_METHODS.map(method => {
-                        const methodTotal = transactions
-                            .filter(t => t.date >= start && t.date <= end && (t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')))
-                            .reduce((sum, t) => sum + t.price, 0);
+                        const methodTrans = transactions.filter(t => t.date >= start && t.date <= end && (t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')));
+                        const methodTotal = methodTrans.reduce((sum, t) => sum + t.price, 0);
 
                         if (methodTotal === 0) return null;
 
                         return (
-                            <div key={method} className="bg-black/20 p-3 rounded-xl border border-white/5 hover:border-yellow-500/30 transition-colors">
-                                <p className="text-[10px] text-white/40 uppercase font-bold mb-1 tracking-tighter">{method}</p>
-                                <p className="font-mono text-emerald-400 font-bold">S/. {methodTotal.toFixed(2)}</p>
+                            <div key={method} className="grid grid-cols-3 p-3 px-4 items-center hover:bg-white/5 transition-colors">
+                                <div className="text-sm font-bold text-emerald-100">{method}</div>
+                                <div className="text-center text-sm text-white/50">{methodTrans.length}</div>
+                                <div className="text-right font-mono text-sm text-emerald-400 font-bold">S/. {methodTotal.toFixed(2)}</div>
                             </div>
                         );
                     })}
 
-                    {/* Caso Otros / Métodos no especificados */}
+                    {/* Caso Otros */}
                     {(() => {
-                        const otherTotal = transactions
-                            .filter(t => t.date >= start && t.date <= end && t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod))
-                            .reduce((sum, t) => sum + t.price, 0);
+                        const otherTrans = transactions.filter(t => t.date >= start && t.date <= end && t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod));
+                        const otherTotal = otherTrans.reduce((sum, t) => sum + t.price, 0);
 
                         if (otherTotal <= 0) return null;
 
                         return (
-                            <div key="otros" className="bg-black/20 p-3 rounded-xl border border-white/5">
-                                <p className="text-[10px] text-white/40 uppercase font-bold mb-1">Otros</p>
-                                <p className="font-mono text-emerald-400 font-bold">S/. {otherTotal.toFixed(2)}</p>
+                            <div key="otros" className="grid grid-cols-3 p-3 px-4 items-center hover:bg-white/5 transition-colors">
+                                <div className="text-sm font-bold text-emerald-100 italic">Otros</div>
+                                <div className="text-center text-sm text-white/50">{otherTrans.length}</div>
+                                <div className="text-right font-mono text-sm text-emerald-400 font-bold">S/. {otherTotal.toFixed(2)}</div>
                             </div>
                         );
                     })()}
 
-                    {/* Total General de Caja */}
-                    <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 col-span-2 sm:col-span-1 border-dashed">
-                        <p className="text-[10px] text-emerald-500 uppercase font-bold mb-1">Total Caja</p>
-                        <p className="font-mono text-white font-bold text-lg">S/. {transactions.filter(t => t.date >= start && t.date <= end).reduce((s, t) => s + t.price, 0).toFixed(2)}</p>
+                    {/* TOTAL FOOTER */}
+                    <div className="grid grid-cols-3 p-3 px-4 items-center bg-white/5 font-bold border-t border-white/10">
+                        <div className="text-xs uppercase tracking-widest text-yellow-500">Total General</div>
+                        <div className="text-center text-sm text-yellow-500/50">{transactions.filter(t => t.date >= start && t.date <= end).length}</div>
+                        <div className="text-right font-mono text-lg text-white">S/. {transactions.filter(t => t.date >= start && t.date <= end).reduce((s, t) => s + t.price, 0).toFixed(2)}</div>
                     </div>
                 </div>
             </div>
@@ -2069,7 +2120,7 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                             <>
                                 <div>
                                     <p className="text-white font-medium">{t.serviceName || 'Servicio'}</p>
-                                    <p className="text-[10px] text-white/40">{t.date.toLocaleString()} • <span className="text-yellow-500/80">{t.paymentMethod || 'Efectivo'}</span></p>
+                                    <p className="text-[10px] text-white/40">{t.date.toLocaleString()} • <span className="text-yellow-500/80">{t.paymentMethod || 'EFECTIVO'}</span></p>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="font-mono text-emerald-200">S/. {t.price}</span>
@@ -2094,6 +2145,23 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                         )}
                     </div>
                 ))}
+            </div>
+
+            {/* Resumen por Método para este bloque */}
+            <div className="bg-black/20 p-3 px-4 border-t border-white/5 space-y-1">
+                <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest mb-1">Resumen de Cobros</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {ADMIN_PAY_METHODS.map(method => {
+                        const mTotal = transactions.filter(t => t.paymentMethod === method || (!t.paymentMethod && method === 'EFECTIVO')).reduce((s, t) => s + t.price, 0);
+                        if (mTotal === 0) return null;
+                        return (
+                            <div key={method} className="flex justify-between items-center">
+                                <span className="text-[10px] text-white/50">{method}</span>
+                                <span className="text-[10px] font-mono text-emerald-400 font-bold">S/. {mTotal.toFixed(2)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     )

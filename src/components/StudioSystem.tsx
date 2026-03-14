@@ -17,7 +17,7 @@ import {
 } from "firebase/app";
 import {
     collection, addDoc, deleteDoc, updateDoc, doc,
-    onSnapshot, query, orderBy, getDocs, getDoc, setDoc, enableIndexedDbPersistence
+    onSnapshot, query, orderBy, getDocs, getDoc, setDoc, enableIndexedDbPersistence, where
 } from 'firebase/firestore';
 
 const playfair = Playfair_Display({ subsets: ['latin'], display: 'swap' }); // Preload font
@@ -64,8 +64,23 @@ export default function StudioSystem() {
     const [pinInput, setPinInput] = useState("");
     const [pinError, setPinError] = useState(false);
 
-    // Admin Actions State
+    // PERSISTENCE: Worker Session
     const [currentWorker, setCurrentWorker] = useState<Employee | null>(null);
+    useEffect(() => {
+        const saved = localStorage.getItem('currentWorker');
+        if (saved) {
+            try {
+                const worker = JSON.parse(saved);
+                setCurrentWorker(worker);
+                setView('WORKER_DASHBOARD');
+            } catch (e) { console.error("Error loading worker session", e); }
+        }
+    }, []);
+
+    useEffect(() => {
+        if (currentWorker) localStorage.setItem('currentWorker', JSON.stringify(currentWorker));
+        else localStorage.removeItem('currentWorker');
+    }, [currentWorker]);
     const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -73,6 +88,7 @@ export default function StudioSystem() {
     const [showServiceModal, setShowServiceModal] = useState(false); // New state for service modal
     const [newServiceName, setNewServiceName] = useState('');
     const [editingService, setEditingService] = useState<{ id: string, name: string } | null>(null);
+    const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
 
     // Inputs CRUD
     const [newEmpName, setNewEmpName] = useState('');
@@ -92,6 +108,14 @@ export default function StudioSystem() {
     const [editBDate, setEditBDate] = useState('');
     const [editBTime, setEditBTime] = useState('');
     const [editBDesc, setEditBDesc] = useState('');
+    const [notifiedBookings, setNotifiedBookings] = useState<Set<string>>(new Set());
+    const [alarmInitialized, setAlarmInitialized] = useState(false);
+    
+    // Reset alarm state on worker change
+    useEffect(() => {
+        setAlarmInitialized(false);
+        setNotifiedBookings(new Set());
+    }, [currentWorker?.id]);
 
 
     // Split Payment State
@@ -151,97 +175,72 @@ export default function StudioSystem() {
             setBookings(snap.docs.map(d => { const data = d.data(); return { id: d.id, ...data, date: data.date?.toDate ? data.date.toDate() : new Date(data.date) } as Booking; }));
         });
 
+        // Register Service Worker for mobile notifications
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+                console.log('SW Registered', reg);
+            }).catch(err => console.error('SW Error', err));
+        }
+
         return () => { unsubEmp(); unsubServ(); unsubTrans(); unsubExp(); unsubBook(); };
     }, []);
 
-    // 🔔 VOICE ALERT SYSTEM (15 Minutes)
+    // 🔔 GLOBAL WORKER NOTIFICATION SYSTEM
     useEffect(() => {
-        const checkAlerts = () => {
-            if (typeof window === 'undefined') return;
+        if (!currentWorker || bookings.length === 0) return;
 
-            const now = new Date().getTime();
-            bookings.forEach(b => {
-                if (!b.date) return;
-
-                const timeDiff = b.date.getTime() - now;
-                // Check if within 15 minutes (900,000 ms) and not passed yet, and not alerted
-                const isFifteenMinutes = timeDiff > 0 && timeDiff <= 15 * 60 * 1000;
-
-                if (isFifteenMinutes && b.status !== 'completed' && !alertedBookings.has(b.id)) {
-                    // console.log("Triggering alert for:", b.clientName);
-
-                    // Create utterance (Volume boosted)
-                    const message = `¡Atención! Hora límite de cita de ${b.clientName || 'Cliente'}, por favor confirmar cita.`;
-                    const utterance = new SpeechSynthesisUtterance(message);
-                    utterance.lang = 'es-ES'; // Spanish
-                    utterance.rate = 1.0; // Faster/Normal rate for more impact
-                    utterance.pitch = 1.1; // Higher pitch to cut through noise
-                    utterance.volume = 1.0; // MAX Volume (0 to 1)
-
-                    // Speak TWICE
-                    window.speechSynthesis.speak(utterance);
-
-                    // Small pause mechanism not robust in all browsers, so simply queueing again works best in simple implementations
-                    const utterance2 = new SpeechSynthesisUtterance(message);
-                    utterance2.lang = 'es-ES';
-                    utterance2.rate = 1.0;
-                    utterance2.pitch = 1.1;
-                    utterance2.volume = 1.0;
-                    window.speechSynthesis.speak(utterance2);
-
-                    // Mark as alerted
-                    setAlertedBookings(prev => {
-                        const next = new Set(prev);
-                        next.add(b.id);
-                        return next;
-                    });
-                }
-            });
-        };
-
-        const interval = setInterval(checkAlerts, 10000); // Check every 10 seconds
-        return () => clearInterval(interval);
-    }, [bookings, alertedBookings]);
-
-    // 🔔 ADMIN VOICE ALERT: When Worker Finishes Service (Status -> completed)
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        // Filter currently completed bookings
-        const currentCompleted = bookings.filter(b => b.status === 'completed');
-
-        // INITIALIZATION CHECK
-        if (!hasInitializedRef.current) {
-            // First time logic: Populate ref with all existing completed bookings so we don't announce them.
-            currentCompleted.forEach(b => completedBookingsRef.current.add(b.id));
-
-            // Mark as initialized only if we have data (or if we trust the first load is 'it')
-            // If bookings array is not empty, we assume we have loaded.
-            if (bookings.length > 0) {
-                hasInitializedRef.current = true;
-            }
+        // 1. Initial Load: Mark current active bookings as "already seen"
+        if (!alarmInitialized) {
+            const existingIds = new Set(
+                bookings
+                    .filter(b => b.professionalId === currentWorker.id && b.status === 'confirmed')
+                    .map(b => b.id)
+            );
+            setNotifiedBookings(existingIds);
+            setAlarmInitialized(true);
             return;
         }
 
-        // REAL-TIME UPDATES
-        currentCompleted.forEach(b => {
-            if (!completedBookingsRef.current.has(b.id)) {
-                // New completion detected!
-                if (view === 'ADMIN_DASHBOARD') {
-                    // 🔊 SPEAK
-                    const workerName = employees.find(e => e.id === b.professionalId)?.name || 'El profesional';
-                    window.speechSynthesis.cancel(); // Reset any stuck speech
-                    const utterance = new SpeechSynthesisUtterance(`Servicio terminado. ${workerName} ahora está libre para el siguiente cliente.`);
-                    utterance.lang = 'es-ES';
-                    utterance.rate = 1.0;
-                    window.speechSynthesis.speak(utterance);
+        // 2. Real-time Check: Compare current bookings with already notified ones
+        bookings.forEach(b => {
+            if (b.professionalId === currentWorker.id && b.status === 'confirmed' && !notifiedBookings.has(b.id)) {
+                // 🚨 NEW APPOINTMENT!
+                const bookingTime = b.date instanceof Date ? b.date : new Date(b.date);
+                const timeStr = bookingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                // Content requested by user
+                const msg = `Tienes una nueva cita a las ${timeStr} para: ${b.service}.`;
+
+                // Show Notification
+                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                    const options = {
+                        body: msg,
+                        icon: "/favicon.ico",
+                        tag: b.id,
+                        requireInteraction: true,
+                        vibrate: [200, 100, 200, 100, 200]
+                    };
+                    
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then(reg => {
+                            reg.showNotification("Mivis Studio - Nueva Cita", options);
+                        });
+                    } else {
+                        const n = new Notification("Mivis Studio - Nueva Cita", options);
+                        n.onclick = () => { window.focus(); n.close(); };
+                    }
                 }
-                // Mark as seen
-                completedBookingsRef.current.add(b.id);
+
+                // Vibrate device
+                if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                    navigator.vibrate([300, 100, 300, 100, 300]);
+                }
+
+                // Mark as notified
+                setNotifiedBookings(prev => new Set(prev).add(b.id));
             }
         });
-
-    }, [bookings, employees, view]);
+    }, [bookings, currentWorker, alarmInitialized, notifiedBookings]);
 
     // --- LOGIC ---
 
@@ -317,8 +316,26 @@ export default function StudioSystem() {
             password: newEmpPass || '1234'
         });
         setNewEmpName(''); setNewEmpRole(''); setNewEmpComm('40'); setNewEmpPhoto(null); setNewEmpPass('');
-        setShowAddModal(false); // Close Modal Automatically!
+        setShowAddModal(false);
         alert("✅ Trabajador Creado Correctamente");
+    };
+
+    const handleUpdateEmployee = async () => {
+        if (!editingEmp || !editingEmp.name) return;
+        try {
+            await updateDoc(doc(db, "employees", editingEmp.id), {
+                name: editingEmp.name,
+                role: editingEmp.role || 'Profesional',
+                photo: editingEmp.photo || null,
+                commission: Number(editingEmp.commission) || 40,
+                password: editingEmp.password || '1234'
+            });
+            setEditingEmp(null);
+            alert("✅ Trabajador Actualizado Correctamente");
+        } catch (e) {
+            console.error(e);
+            alert("Error al actualizar");
+        }
     };
     // FIX: Service Create now clears input
 
@@ -586,7 +603,7 @@ export default function StudioSystem() {
             <div className="min-h-screen bg-[#0f2a24] flex items-center justify-center p-4">
                 <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
                     <div className="flex justify-center mb-6">
-                        <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-20 h-20 rounded-full border-4 border-yellow-500 bg-white" />
+                        <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-20 h-20 rounded-full border-4 border-yellow-500 bg-white" alt={currentWorker.name} />
                     </div>
                     <h2 className={`${playfair.className} text-xl text-white mb-2`}>Hola, {currentWorker.name}</h2>
                     <p className="text-white/40 text-xs mb-6">Ingresa tu clave de acceso</p>
@@ -603,7 +620,7 @@ export default function StudioSystem() {
                             <button key={n} onClick={() => setPinInput(prev => (prev.length < 4 ? prev + n : prev))} className="h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">{n}</button>
                         ))}
                         <div className="col-start-2"><button onClick={() => setPinInput(prev => (prev.length < 4 ? prev + 0 : prev))} className="w-full h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">0</button></div>
-                        <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors"><X className="w-6 h-6" /></button></div>
+                        <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors" aria-label="Borrar último dígito" title="Borrar"><X className="w-6 h-6" /></button></div>
                     </div>
 
                     <div className="flex gap-2">
@@ -633,14 +650,16 @@ export default function StudioSystem() {
             <div className="min-h-screen bg-[#0f2a24] p-6">
                 <header className="flex justify-between items-center mb-8 max-w-xl mx-auto">
                     <div className="flex items-center gap-3">
-                        <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-12 h-12 rounded-full border border-white/20 bg-white" />
+                        <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-12 h-12 rounded-full border border-white/20 bg-white" alt={currentWorker.name} />
                         <div>
                             <h1 className={`${playfair.className} text-xl text-white`}>Hola, {currentWorker.name} ✨</h1>
                             <p className="text-xs text-emerald-400">Tu Espacio de Trabajo</p>
                         </div>
                     </div>
-                    <button onClick={() => { setView('WORKER_SELECT'); setCurrentWorker(null); }} className="p-2 bg-white/5 rounded-full text-white/50 hover:text-white"><LogOut className="w-5 h-5" /></button>
+                    <button onClick={() => { setView('WORKER_SELECT'); setCurrentWorker(null); }} className="p-2 bg-white/5 rounded-full text-white/50 hover:text-white" aria-label="Cerrar sesión" title="Cerrar Sesión"><LogOut className="w-5 h-5" /></button>
                 </header>
+
+                {/* ALARM LISTENER MOVED TO ROOT */}
 
                 <main className="max-w-xl mx-auto space-y-6">
                     <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
@@ -727,7 +746,7 @@ export default function StudioSystem() {
                             <button key={n} onClick={() => setPinInput(prev => (prev.length < 6 ? prev + n : prev))} className="h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">{n}</button>
                         ))}
                         <div className="col-start-2"><button onClick={() => setPinInput(prev => (prev.length < 6 ? prev + 0 : prev))} className="w-full h-14 rounded-full bg-white/5 hover:bg-white/10 text-xl font-bold text-white transition-colors">0</button></div>
-                        <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors"><X className="w-6 h-6" /></button></div>
+                        <div className="col-start-3"><button onClick={() => setPinInput(prev => prev.slice(0, -1))} className="w-full h-14 rounded-full flex items-center justify-center text-white/30 hover:text-white transition-colors" aria-label="Borrar dígito" title="Borrar"><X className="w-6 h-6" /></button></div>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setView('LANDING')} className="flex-1 py-3 rounded-xl border border-white/10 text-xs text-white/50 hover:bg-white/5">Cancelar</button>
@@ -781,8 +800,8 @@ export default function StudioSystem() {
                         <NavBtn icon={<Wallet />} label="Finanzas" active={activeTab === 'FINANCE'} onClick={() => setActiveTab('FINANCE')} />
                         <NavBtn icon={<TrendingUp />} label="Reportes" active={activeTab === 'REPORTS'} onClick={() => setActiveTab('REPORTS')} />
                     </div>
-                    <button onClick={() => setShowSettingsModal(true)} className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-full border border-transparent hover:border-white/10 transition-all ml-2"><Settings className="w-4 h-4" /></button>
-                    <button onClick={() => setView('LANDING')} className="p-2 text-red-400 hover:bg-red-500/10 rounded-full border border-transparent hover:border-red-500/20 transition-all ml-2"><LogOut className="w-4 h-4" /></button>
+                    <button onClick={() => setShowSettingsModal(true)} className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-full border border-transparent hover:border-white/10 transition-all ml-2" title="Configuración de Administrador" aria-label="Ajustes"><Settings className="w-4 h-4" /></button>
+                    <button onClick={() => setView('LANDING')} className="p-2 text-red-400 hover:bg-red-500/10 rounded-full border border-transparent hover:border-red-500/20 transition-all ml-2" title="Salir" aria-label="Regresar al inicio"><LogOut className="w-4 h-4" /></button>
                 </div>
             </header>
 
@@ -836,7 +855,10 @@ export default function StudioSystem() {
                                                         <p className="text-xs text-white/50">{emp.role}</p>
                                                     </div>
                                                     <div className="ml-auto flex flex-col gap-2">
-                                                        <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-500/10 transition-colors" aria-label="Eliminar empleado">
+                                                        <button onClick={(e) => { e.stopPropagation(); setEditingEmp(emp); }} className="text-emerald-400 hover:text-emerald-300 p-2 rounded-full hover:bg-emerald-500/10 transition-colors" title="Editar empleado" aria-label="Editar">
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                        <button onClick={(e) => handleEmployeeDelete(emp.id, e)} className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-500/10 transition-colors" aria-label="Eliminar empleado" title="Eliminar">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>
@@ -970,22 +992,24 @@ export default function StudioSystem() {
                             <p className="text-xs font-bold uppercase text-white/50 mb-2">Agregar Servicio</p>
                             <div className="grid grid-cols-12 gap-2">
                                 <div className="col-span-4 max-w-full">
-                                    <select className="input-modern py-2 text-sm max-w-full" value={addItemServ} onChange={e => setAddItemServ(e.target.value)}>
+                                    <select aria-label="Seleccionar servicio" className="input-modern py-2 text-sm max-w-full" value={addItemServ} onChange={e => setAddItemServ(e.target.value)}>
                                         <option value="">Servicio...</option>
                                         {services.map(s => <option key={s.id} value={s.name} className="bg-black">{s.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="col-span-4">
-                                    <select className="input-modern py-2 text-sm" value={addItemEmp} onChange={e => setAddItemEmp(e.target.value)}>
+                                    <select aria-label="Seleccionar profesional" className="input-modern py-2 text-sm" value={addItemEmp} onChange={e => setAddItemEmp(e.target.value)}>
                                         <option value="">Profesional...</option>
                                         {employees.map(e => <option key={e.id} value={e.id} className="bg-black">{e.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="col-span-3">
-                                    <input type="number" placeholder="Precio" className="input-modern py-2 text-sm" value={addItemPrice} onChange={e => setAddItemPrice(e.target.value)} />
+                                    <input aria-label="Precio del servicio" type="number" placeholder="Precio" className="input-modern py-2 text-sm" value={addItemPrice} onChange={e => setAddItemPrice(e.target.value)} />
                                 </div>
                                 <div className="col-span-1">
                                     <button
+                                        aria-label="Agregar al carrito"
+                                        title="Agregar"
                                         onClick={() => {
                                             if (addItemServ && addItemEmp && addItemPrice) {
                                                 const emp = employees.find(e => e.id === addItemEmp);
@@ -1017,12 +1041,13 @@ export default function StudioSystem() {
                                         <div className="flex items-center gap-3">
                                             <span className="text-sm text-yellow-500 font-serif">S/.</span>
                                             <input
+                                                aria-label="Editar precio"
                                                 type="number"
                                                 className="w-16 bg-transparent border-b border-white/20 text-right font-mono focus:border-yellow-500 outline-none"
                                                 value={item.price}
                                                 onChange={(e) => updateCartItemPrice(item.id, e.target.value)}
                                             />
-                                            <button onClick={() => removeCartItem(item.id)} className="text-red-400 hover:text-red-300 ml-2"><Trash2 className="w-4 h-4" /></button>
+                                            <button aria-label="Eliminar del carrito" title="Eliminar" onClick={() => removeCartItem(item.id)} className="text-red-400 hover:text-red-300 ml-2"><Trash2 className="w-4 h-4" /></button>
                                         </div>
                                     </div>
                                 ))
@@ -1105,8 +1130,8 @@ export default function StudioSystem() {
                             <p className="text-white/50 text-xs text-center mb-6">Cambia tu clave de acceso de administrador.</p>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nueva Clave (PIN)</label>
-                                    <input type="text" placeholder="Ej. 2024" className="input-modern text-center tracking-[0.5em] font-bold text-lg" maxLength={6} value={newPin} onChange={e => setNewPin(e.target.value)} />
+                                    <label id="lbl-new-pin" className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nueva Clave (PIN)</label>
+                                    <input aria-labelledby="lbl-new-pin" type="text" placeholder="Ej. 2024" className="input-modern text-center tracking-[0.5em] font-bold text-lg" maxLength={6} value={newPin} onChange={e => setNewPin(e.target.value)} />
                                 </div>
                             </div>
                             <button onClick={handleUpdatePin} className="btn-primary w-full py-4 mt-6">Actualizar Clave</button>
@@ -1128,6 +1153,7 @@ export default function StudioSystem() {
 
                             <div className="flex gap-2 mb-6">
                                 <input
+                                    aria-label="Nuevo servicio"
                                     type="text"
                                     placeholder="Nuevo servicio..."
                                     className="input-modern flex-1"
@@ -1141,6 +1167,7 @@ export default function StudioSystem() {
                                     }}
                                 />
                                 <button
+                                    aria-label="Agregar servicio"
                                     onClick={async () => {
                                         if (newServiceName.trim()) {
                                             await addDoc(collection(db, "services"), { name: newServiceName.trim() });
@@ -1181,9 +1208,11 @@ export default function StudioSystem() {
 
                                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             {editingService?.id !== s.id && (
-                                                <button onClick={() => setEditingService(s)} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Edit2 className="w-3 h-3" /></button>
+                                                <button aria-label="Editar servicio" onClick={() => setEditingService(s)} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Edit2 className="w-3 h-3" /></button>
                                             )}
                                             <button
+                                                aria-label="Eliminar servicio"
+                                                title="Eliminar"
                                                 onClick={async () => {
                                                     if (confirm('¿Eliminar servicio?')) await deleteDoc(doc(db, "services", s.id));
                                                 }}
@@ -1209,7 +1238,7 @@ export default function StudioSystem() {
                                     <h3 className={`${playfair.className} text-2xl text-yellow-500`}>
                                         {selectedBooking.status === 'completed' ? 'Servicio Terminado' : 'Detalle de Cita'}
                                     </h3>
-                                    <button onClick={isEditingBooking ? handleSaveBooking : handleStartEditBooking} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-yellow-500 transition-colors">
+                                    <button onClick={isEditingBooking ? handleSaveBooking : handleStartEditBooking} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-yellow-500 transition-colors" title={isEditingBooking ? "Guardar" : "Editar"} aria-label={isEditingBooking ? "Guardar cambios" : "Editar cita"}>
                                         {isEditingBooking ? <CheckCircle2 className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
                                     </button>
                                 </div>
@@ -1236,24 +1265,24 @@ export default function StudioSystem() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="text-[10px] text-white/40 uppercase font-bold">Fecha</label>
-                                                    <input type="date" className="input-modern py-1 px-2 text-sm" value={editBDate} onChange={e => setEditBDate(e.target.value)} />
+                                                    <label id="lbl-edit-date" className="text-[10px] text-white/40 uppercase font-bold">Fecha</label>
+                                                    <input aria-labelledby="lbl-edit-date" type="date" className="input-modern py-1 px-2 text-sm" value={editBDate} onChange={e => setEditBDate(e.target.value)} />
                                                 </div>
                                                 <div>
-                                                    <label className="text-[10px] text-white/40 uppercase font-bold">Hora</label>
-                                                    <input type="time" className="input-modern py-1 px-2 text-sm" value={editBTime} onChange={e => setEditBTime(e.target.value)} />
+                                                    <label id="lbl-edit-time" className="text-[10px] text-white/40 uppercase font-bold">Hora</label>
+                                                    <input aria-labelledby="lbl-edit-time" type="time" className="input-modern py-1 px-2 text-sm" value={editBTime} onChange={e => setEditBTime(e.target.value)} />
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="text-[10px] text-white/40 uppercase font-bold">Servicio</label>
-                                                <select className="input-modern py-1 px-2 text-sm" value={editBService} onChange={e => setEditBService(e.target.value)}>
+                                                <label id="lbl-edit-service" className="text-[10px] text-white/40 uppercase font-bold">Servicio</label>
+                                                <select aria-labelledby="lbl-edit-service" className="input-modern py-1 px-2 text-sm" value={editBService} onChange={e => setEditBService(e.target.value)}>
                                                     <option value="">Seleccionar...</option>
                                                     {services.map(s => <option key={s.id} value={s.name} className="bg-black">{s.name}</option>)}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="text-[10px] text-white/40 uppercase font-bold">Profesional</label>
-                                                <select className="input-modern py-1 px-2 text-sm" value={editBProf} onChange={e => setEditBProf(e.target.value)}>
+                                                <label id="lbl-edit-pro" className="text-[10px] text-white/40 uppercase font-bold">Profesional</label>
+                                                <select aria-labelledby="lbl-edit-pro" className="input-modern py-1 px-2 text-sm" value={editBProf} onChange={e => setEditBProf(e.target.value)}>
                                                     <option value="pending">Sin Asignar</option>
                                                     {employees.map(e => <option key={e.id} value={e.id} className="bg-black">{e.name}</option>)}
                                                 </select>
@@ -1315,7 +1344,7 @@ export default function StudioSystem() {
                                                 <div className="col-span-2">
                                                     <p className="text-[10px] text-white/40 uppercase font-bold mb-2">Comprobante de Pago</p>
                                                     <div className="rounded-xl overflow-hidden border border-white/10">
-                                                        <img src={selectedBooking.paymentVoucher} className="w-full object-cover" alt="Voucher" />
+                                                    <img src={selectedBooking.paymentVoucher} className="w-full object-cover" alt="Comprobante de pago" />
                                                     </div>
                                                 </div>
                                             )}
@@ -1329,7 +1358,7 @@ export default function StudioSystem() {
                                             <Send className="w-5 h-5" /> Confirmar por WhatsApp
                                         </button>
 
-                                        <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2">
+                                        <button onClick={() => { handleDeleteBooking(selectedBooking.id); setSelectedBooking(null); }} className="w-full mt-3 py-3 text-red-400 text-xs hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20 flex items-center justify-center gap-2" title="Eliminar Cliente" aria-label="Eliminar cita">
                                             <Trash2 className="w-4 h-4" /> Eliminar Cliente
                                         </button>
                                     </>
@@ -1338,12 +1367,41 @@ export default function StudioSystem() {
                         </Modal>
                     )}
 
-                    {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /><input type="text" placeholder="Contraseña (4 dígitos)" className="input-modern" maxLength={4} value={newEmpPass} onChange={e => setNewEmpPass(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
+                    {showAddModal && <Modal onClose={() => setShowAddModal(false)}><h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Nuevo Talento</h3><div className="flex justify-center mb-6"><label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">{newEmpPhoto ? <img src={newEmpPhoto} className="w-full h-full object-cover" alt="Previsualización de foto" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" aria-label="Subir foto" />}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} title="Subir foto de empleado" /></label></div><div className="space-y-4"><input type="text" placeholder="Nombre" className="input-modern" aria-label="Nombre" value={newEmpName} onChange={e => setNewEmpName(e.target.value)} /><input type="text" placeholder="Cargo" className="input-modern" aria-label="Cargo" value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} /><input type="number" placeholder="Comisión %" className="input-modern" aria-label="Comisión" value={newEmpComm} onChange={e => setNewEmpComm(e.target.value)} /><input type="text" placeholder="Contraseña (4 dígitos)" className="input-modern" aria-label="Contraseña" maxLength={4} value={newEmpPass} onChange={e => setNewEmpPass(e.target.value)} /></div><button onClick={handleCreateEmployee} className="btn-primary w-full py-4 mt-6">Crear</button></Modal>}
+
+                    {editingEmp && (
+                        <Modal onClose={() => setEditingEmp(null)}>
+                            <h3 className={`${playfair.className} text-2xl text-yellow-500 mb-6 text-center`}>Editar Trabajador</h3>
+                            <div className="flex justify-center mb-6">
+                                <label className="relative w-24 h-24 rounded-full bg-black/40 border-2 border-dashed border-white/20 hover:border-yellow-500 cursor-pointer flex items-center justify-center overflow-hidden transition-colors group">
+                                    {editingEmp.photo ? <img src={editingEmp.photo} className="w-full h-full object-cover" alt="Foto del empleado" /> : <Camera className="w-8 h-8 text-white/30 group-hover:text-yellow-500 transition-colors" aria-label="Editar foto" />}
+                                    <input type="file" accept="image/*" className="hidden" title="Editar foto" onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => setEditingEmp({ ...editingEmp, photo: reader.result as string });
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }} />
+                                </label>
+                            </div>
+                            <div className="space-y-4">
+                                <input type="text" placeholder="Nombre" className="input-modern" value={editingEmp.name} onChange={e => setEditingEmp({ ...editingEmp, name: e.target.value })} />
+                                <input type="text" placeholder="Cargo" className="input-modern" value={editingEmp.role} onChange={e => setEditingEmp({ ...editingEmp, role: e.target.value })} />
+                                <input type="number" placeholder="Comisión %" className="input-modern" value={editingEmp.commission} onChange={e => setEditingEmp({ ...editingEmp, commission: e.target.value })} />
+                                <div>
+                                    <label className="text-[10px] text-yellow-500 font-bold uppercase ml-1">Contraseña de Acceso</label>
+                                    <input type="text" placeholder="Contraseña (4 dígitos)" className="input-modern" maxLength={4} value={editingEmp.password || ''} onChange={e => setEditingEmp({ ...editingEmp, password: e.target.value })} />
+                                </div>
+                            </div>
+                            <button onClick={handleUpdateEmployee} className="btn-primary w-full py-4 mt-6">Guardar Cambios</button>
+                        </Modal>
+                    )}
                     {selectedEmp && (
                         <Modal onClose={() => setSelectedEmp(null)}>
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
                                 <div className="flex items-center gap-3">
-                                    <img src={selectedEmp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedEmp.avatarSeed}`} className="w-12 h-12 object-cover rounded-full bg-[#1a3830]" />
+                                    <img src={selectedEmp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedEmp.avatarSeed}`} className="w-12 h-12 object-cover rounded-full bg-[#1a3830]" alt={`Avatar de ${selectedEmp.name}`} />
                                     <div><h3 className={`${playfair.className} text-xl text-white`}>{selectedEmp.name}</h3></div>
                                 </div>
                             </div>
@@ -1392,8 +1450,9 @@ export default function StudioSystem() {
 
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Servicio</label>
+                                    <label id="lbl-quick-serv" className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Servicio</label>
                                     <select
+                                        aria-labelledby="lbl-quick-serv"
                                         className="input-modern w-full appearance-none"
                                         value={quickService}
                                         onChange={e => setQuickService(e.target.value)}
@@ -1419,13 +1478,15 @@ export default function StudioSystem() {
                                     onClick={handleQuickCheckIn}
                                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/40 transition-all flex items-center justify-center gap-2 mt-4"
                                 >
-                                    <Zap className="w-5 h-5 text-yellow-300" />
+                                    <Zap className="w-5 h-5 text-yellow-300" aria-hidden="true" />
                                     Iniciar Atención
                                 </button>
                             </div>
                         </Modal>
                     )}
                 </AnimatePresence>
+                {/* 🔔 GLOBAL WORKER ALARM LISTENER (Stays active if logged in) */}
+                {currentWorker && <WorkerAlarmListener workerId={currentWorker.id} />}
             </main >
             <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div >
     );
@@ -1493,7 +1554,7 @@ function BookingSection({ bookings, employees, services, onAdd, onDelete, onSele
                                                 <span className="font-bold">Atendido por: {emp?.name || 'Desconocido'}</span>
                                             </div>
                                         )}
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(b.id); }} className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" aria-label="Eliminar cita"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(b.id); }} className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors" aria-label="Eliminar cita" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             );
@@ -1534,9 +1595,9 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             </div>
 
             <div>
-                <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Qué te harás hoy?</label>
+                <label id="lbl-book-serv" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Qué te harás hoy?</label>
                 <div className="relative">
-                    <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
+                    <select aria-labelledby="lbl-book-serv" className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                 </div>
             </div>
@@ -1544,14 +1605,16 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             {!isClient && (
                 <>
                     <div>
-                        <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Asignar Profesional (Opcional)</label>
+                    <div>
+                        <label id="lbl-book-pro" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Asignar Profesional (Opcional)</label>
                         <div className="relative">
-                            <select className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
+                            <select aria-labelledby="lbl-book-pro" className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
                                 <option value="">Ninguno (Pendiente)</option>
                                 {employees.map((emp: Employee) => <option key={emp.id} value={emp.id} className="bg-neutral-900">{emp.name}</option>)}
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                         </div>
+                    </div>
                     </div>
                     <div>
                         <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Notas / Descripción (Opcional)</label>
@@ -1566,14 +1629,16 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             )}
 
             <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Fecha</label>
-                    <input type="date" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bDate} onChange={e => setBDate(e.target.value)} />
+                    <label id="lbl-book-date" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Fecha</label>
+                    <input aria-labelledby="lbl-book-date" type="date" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bDate} onChange={e => setBDate(e.target.value)} />
                 </div>
                 <div>
-                    <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Hora</label>
-                    <input type="time" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bTime} onChange={e => setBTime(e.target.value)} />
+                    <label id="lbl-book-time" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Hora</label>
+                    <input aria-labelledby="lbl-book-time" type="time" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bTime} onChange={e => setBTime(e.target.value)} />
                 </div>
+            </div>
             </div>
 
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleSubmit} className="btn-primary w-full py-4 mt-4 flex justify-center gap-3 items-center text-sm uppercase tracking-widest shadow-xl shadow-yellow-600/20 hover:shadow-yellow-600/40">
@@ -1589,9 +1654,9 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
     const [cat, setCat] = useState(EXPENSE_CATS[0]);
     const [historyPeriod, setHistoryPeriod] = useState<'week' | 'month'>('week');
     const [offset, setOffset] = useState(0); // Added for navigation
-    
+
     const now = new Date();
-    
+
     // Range Calculation logic
     const getRange = () => {
         const d = new Date(now);
@@ -1624,7 +1689,7 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
 
     let rangeLabel = "";
     if (historyPeriod === 'week') {
-        rangeLabel = `${start.getDate()} - ${new Date(new Date(end).setDate(end.getDate()-1)).getDate()} ${start.toLocaleDateString('es-PE', { month: 'short' })}`;
+        rangeLabel = `${start.getDate()} - ${new Date(new Date(end).setDate(end.getDate() - 1)).getDate()} ${start.toLocaleDateString('es-PE', { month: 'short' })}`;
     } else {
         rangeLabel = start.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
     }
@@ -1650,7 +1715,7 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
                         <button onClick={() => { setHistoryPeriod('week'); setOffset(0); }} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'week' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Semana</button>
                         <button onClick={() => { setHistoryPeriod('month'); setOffset(0); }} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${historyPeriod === 'month' ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-900/20' : 'text-white/40'}`}>Mes</button>
                     </div>
-                    <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
+                    <button onClick={onReset} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2" title="Reiniciar finanzas" aria-label="Reiniciar finanzas">
                         <RotateCcw className="w-3 h-3" /> Reset
                     </button>
                 </div>
@@ -1658,12 +1723,12 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
 
             {/* Navigation Arrows */}
             <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5 mb-6">
-                <button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronRight className="rotate-180 w-5 h-5 text-emerald-400" /></button>
+                <button aria-label="Anterior" title="Anterior" onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronRight className="rotate-180 w-5 h-5 text-emerald-400" /></button>
                 <div className="flex flex-col items-center">
                     <span className="font-playfair text-xl capitalize min-w-[200px] text-center text-white">{rangeLabel}</span>
-                    {offset !== 0 && <button onClick={() => setOffset(0)} className="text-[10px] text-yellow-500/60 hover:text-yellow-500 uppercase font-bold tracking-widest mt-1">Volver a Hoy</button>}
+                    {offset !== 0 && <button onClick={() => setOffset(0)} className="text-[10px] text-yellow-500/60 hover:text-yellow-500 uppercase font-bold tracking-widest mt-1" title="Volver al periodo actual" aria-label="Volver al periodo actual">Volver a Hoy</button>}
                 </div>
-                <button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronRight className="w-5 h-5 text-emerald-400" /></button>
+                <button aria-label="Siguiente" title="Siguiente" onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><ChevronRight className="w-5 h-5 text-emerald-400" /></button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1677,14 +1742,14 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
                     <h3 className="font-bold text-emerald-200 mb-4 flex items-center gap-2"><Plus className="w-5 h-5" /> Registrar Salida</h3>
                     <div className="space-y-4">
                         <div>
-                            <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Concepto</label>
-                            <select className="input-modern" value={cat} onChange={e => setCat(e.target.value)}>
+                            <label id="lbl-exp-concept" className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Concepto</label>
+                            <select aria-labelledby="lbl-exp-concept" className="input-modern" value={cat} onChange={e => setCat(e.target.value)}>
                                 {EXPENSE_CATS.map(c => <option key={c} value={c} className="bg-[#0f2a24]">{c}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Monto (S/.)</label>
-                            <input type="number" placeholder="0.00" className="input-modern font-mono font-bold text-lg" value={amt} onChange={e => setAmt(e.target.value)} />
+                            <label id="lbl-exp-amt" className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Monto (S/.)</label>
+                            <input id="inp-exp-amt" type="number" placeholder="0.00" className="input-modern font-mono font-bold text-lg" value={amt} onChange={e => setAmt(e.target.value)} />
                         </div>
                         <div>
                             <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nota (Opcional)</label>
@@ -1708,7 +1773,7 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="font-mono text-white font-bold">- S/. {exp.amount.toFixed(2)}</span>
-                                    <button onClick={() => onDelete(exp.id)} className="text-white/20 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                                    <button aria-label="Eliminar gasto" title="Eliminar" onClick={() => onDelete(exp.id)} className="text-white/20 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
                                 </div>
                             </div>
                         ))}
@@ -1902,9 +1967,7 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
                                     return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
                                 })}
                                 onSend={() => sendDetailedWhatsApp("Semanal", transactions.filter((t: any) => {
-                                    const d = new Date(); d.setHours(0, 0, 0, 0); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                    const ws = new Date(d); ws.setDate(diff); const we = new Date(ws); we.setDate(ws.getDate() + 7);
-                                    return t.date >= ws && t.date <= we && t.employeeId === selectedRepEmp.id;
+                                    const d = new Date(); return t.date.getMonth() === d.getMonth() && t.date.getFullYear() === d.getFullYear() && t.employeeId === selectedRepEmp.id;
                                 }), selectedRepEmp.name, selectedRepEmp.commission)}
                                 onEdit={handleEditTransaction}
                                 onDelete={handleDeleteTransaction}
@@ -1928,12 +1991,12 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
             <div className="flex justify-between items-center">
                 <h2 className={`text-2xl text-yellow-500 ${playfair.className}`}>Reportes</h2>
                 <div className="flex gap-2">
-                    <button onClick={generateMonthlyPDF} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-lg text-xs font-bold transition-all border border-white/5"><Printer className="w-4 h-4" /> PDF Mensual</button>
-                    <div className="flex bg-white/5 p-1 rounded-lg">{['day', 'week', 'month'].map((t: any) => (<button key={t} onClick={() => { setTab(t); setOffset(0) }} className={`px-3 py-1 text-xs uppercase font-bold rounded ${tab === t ? 'bg-emerald-500 text-black' : 'text-white/50'}`}>{t === 'day' ? 'Diario' : t === 'week' ? 'Semana' : 'Mes'}</button>))}</div>
+                    <button onClick={generateMonthlyPDF} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-lg text-xs font-bold transition-all border border-white/5" title="Generar PDF mensual" aria-label="Generar PDF mensual"><Printer className="w-4 h-4" /> PDF Mensual</button>
+                    <div className="flex bg-white/5 p-1 rounded-lg">{['day', 'week', 'month'].map((t: any) => (<button key={t} onClick={() => { setTab(t); setOffset(0) }} className={`px-3 py-1 text-xs uppercase font-bold rounded ${tab === t ? 'bg-emerald-500 text-black' : 'text-white/50'}`} aria-label={`Ver reporte ${t === 'day' ? 'diario' : t === 'week' ? 'semanal' : 'mensual'}`} title={`Ver reporte ${t === 'day' ? 'diario' : t === 'week' ? 'semanal' : 'mensual'}`}>{t === 'day' ? 'Diario' : t === 'week' ? 'Semana' : 'Mes'}</button>))}</div>
                 </div>
             </div>
 
-            <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight className="w-5 h-5" /></button></div>
+            <div className="flex justify-center items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5"><button aria-label="Anterior" onClick={() => setOffset(offset - 1)} className="p-2 hover:bg-white/10 rounded-full" title="Periodo anterior"><ChevronRight className="rotate-180 w-5 h-5" /></button><span className="font-playfair text-xl capitalize min-w-[200px] text-center">{rangeLabel}</span><button aria-label="Siguiente" onClick={() => setOffset(offset + 1)} className="p-2 hover:bg-white/10 rounded-full" title="Periodo siguiente"><ChevronRight className="w-5 h-5" /></button></div>
 
             {/* 💰 RESUMEN POR TIPO DE PAGO */}
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
@@ -1964,7 +2027,6 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
                         );
                     })}
 
-                    {/* Caso Otros */}
                     {(() => {
                         const otherTrans = transactions.filter(t => t.date >= start && t.date <= end && t.paymentMethod && !ADMIN_PAY_METHODS.includes(t.paymentMethod));
                         const otherTotal = otherTrans.reduce((sum, t) => sum + t.price, 0);
@@ -2059,7 +2121,7 @@ function ReportSection({ employees, transactions, onUpdateComm }: ReportSectionP
                                     <div><p className="font-bold text-emerald-100">{emp.name}</p><p className="text-[10px] text-white/50 uppercase">{empTrans.length} Servicios</p></div>
                                 </div>
                                 <div className="flex items-center gap-4 justify-end">
-                                    <button onClick={(e) => { e.stopPropagation(); sendDetailedWhatsApp("General", empTrans, emp.name, commValue); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30"><Send className="w-4 h-4" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); sendDetailedWhatsApp("General", empTrans, emp.name, commValue); }} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-2 rounded-full transition-all border border-green-500/30" title="Enviar reporte WhatsApp" aria-label="Enviar reporte WhatsApp"><Send className="w-4 h-4" /></button>
                                     <div className="text-right"><p className="text-[10px] text-white/40 uppercase font-bold">Generado</p><p className="font-mono text-emerald-200">S/. {totalGen}</p></div>
                                     <div className="text-right">
                                         <p className="text-[10px] text-white/40 uppercase font-bold">% Comision</p>
@@ -2111,7 +2173,7 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                 <span>{title}</span>
                 <div className="flex items-center gap-4">
                     <span>S/. {transactions.reduce((s: number, t: Transaction) => s + t.price, 0).toFixed(2)}</span>
-                    <button onClick={onSend} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-1 rounded-full transition-all"><Send className="w-3 h-3" /></button>
+                    <button onClick={onSend} className="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white p-1 rounded-full transition-all" title="Enviar reporte WhatsApp" aria-label="Enviar reporte WhatsApp"><Send className="w-3 h-3" /></button>
                 </div>
             </h4>
             <div className="divide-y divide-white/5">
@@ -2136,8 +2198,8 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                                     />
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                    <button onClick={saveEdit} className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500 hover:text-white transition-colors"><CheckCircle2 className="w-3 h-3" /></button>
-                                    <button onClick={() => setEditingId(null)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"><X className="w-3 h-3" /></button>
+                                    <button onClick={saveEdit} className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500 hover:text-white transition-colors" title="Guardar cambios" aria-label="Guardar cambios"><CheckCircle2 className="w-3 h-3" /></button>
+                                    <button onClick={() => setEditingId(null)} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors" title="Cancelar edición" aria-label="Cancelar edición"><X className="w-3 h-3" /></button>
                                 </div>
                             </div>
                         ) : (
@@ -2153,6 +2215,7 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                                             onClick={() => startEdit(t)}
                                             className="p-1.5 bg-white/5 hover:bg-yellow-500/20 rounded-lg text-white/40 hover:text-yellow-500 transition-colors"
                                             title="Editar"
+                                            aria-label="Editar servicio"
                                         >
                                             <Edit2 className="w-3 h-3" />
                                         </button>
@@ -2160,6 +2223,7 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                                             onClick={() => onDelete(t.id)}
                                             className="p-1.5 bg-white/5 hover:bg-red-500/20 rounded-lg text-white/40 hover:text-red-400 transition-colors"
                                             title="Eliminar"
+                                            aria-label="Eliminar servicio"
                                         >
                                             <Trash2 className="w-3 h-3" />
                                         </button>
@@ -2198,6 +2262,96 @@ type NavBtnProps = { icon: React.ReactNode; label?: string; active: boolean; onC
 function NavBtn({ icon, label, active, onClick }: NavBtnProps) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
 
 function Modal({ children, onClose }: { children: React.ReactNode, onClose: () => void }) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }
+
+function WorkerAlarmListener({ workerId }: { workerId: string }) {
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [isStandalone, setIsStandalone] = useState(false);
+    const [showDebug, setShowDebug] = useState(false);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const standalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+            setIsStandalone(standalone);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFav7//7//v/+/v/9WQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+            audio.loop = true;
+            audio.volume = 0.001; 
+            audioRef.current = audio;
+        }
+    }, []);
+
+    const enableNotifications = async () => {
+        if (audioRef.current) {
+            audioRef.current.play().catch(e => console.log("Audio play blocked", e));
+        }
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+            try {
+                const res = await Notification.requestPermission();
+                alert(`Permiso: ${res}`);
+            } catch (e) {
+                alert("Error al pedir permiso");
+            }
+        } else if (isIOS) {
+            alert("En iPhone, debes 'Agregar a inicio' primero para activar las notificaciones.");
+        }
+        
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate(200);
+        }
+    };
+
+    const hasNotificationSupport = typeof window !== 'undefined' && 'Notification' in window;
+    const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const currentPermission = hasNotificationSupport ? Notification.permission : 'default';
+
+    return (
+        <div className="fixed bottom-4 right-4 z-[9999] pointer-events-none">
+            <div className="pointer-events-auto flex flex-col items-end gap-3">
+                {/* iPhone specific instructions */}
+                {isIOS && !isStandalone && (
+                    <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-emerald-950/90 backdrop-blur-xl border-2 border-yellow-500/50 p-4 rounded-[2rem] text-[11px] text-white max-w-[220px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-yellow-500 font-bold">
+                            <Zap className="w-4 h-4 fill-current" />
+                            <span>IMPORTANTE IPHONE</span>
+                        </div>
+                        <p>Para recibir notificaciones:</p>
+                        <ol className="list-decimal list-inside space-y-1 opacity-90">
+                            <li>Pulsa el botón <strong>Compartir</strong> <span className="inline-block p-1 bg-white/10 rounded">↑</span></li>
+                            <li>Selecciona <strong>"Agregar a inicio"</strong></li>
+                            <li>Abre el sistema desde tu pantalla</li>
+                        </ol>
+                    </motion.div>
+                )}
+
+                <div className="flex flex-col gap-2 items-end">
+                    {/* Always show button on iOS Safari to force permission check */}
+                    {(!isStandalone && isIOS) || currentPermission !== 'granted' ? (
+                        <button 
+                            onClick={enableNotifications} 
+                            className="bg-yellow-500 hover:bg-yellow-400 text-black text-[11px] font-black px-6 py-3 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] flex items-center gap-2 transition-all active:scale-95"
+                        >
+                            <div className="relative">
+                                <span className="absolute inset-0 animate-ping rounded-full bg-black/20"></span>
+                                <Zap className="w-4 h-4 relative z-10" />
+                            </div>
+                            ACTIVAR AVISOS 🔔
+                        </button>
+                    ) : (
+                        <div className="flex flex-col items-end gap-2">
+                            <div className="bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-4 py-2 rounded-full border border-emerald-500/20 backdrop-blur-md flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> LISTO PARA RECIBIR CITAS
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // --- GALERÍA FLOTANTE (REBOTE) ---
 function BouncingGallery({ images, onSelect }: { images: string[], onSelect: (src: string) => void }) {

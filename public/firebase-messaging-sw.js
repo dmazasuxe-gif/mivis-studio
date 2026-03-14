@@ -14,5 +14,17 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-    // Note: Manual notification disabled to avoid duplicates with automatic FCM behavior.
+    const notificationTitle = payload.notification.title || 'Mivis Studio 💅';
+    const notificationOptions = {
+        body: payload.notification.body,
+        icon: '/logo.png',
+        badge: '/logo.png',
+        tag: (payload.data && payload.data.bookingId) ? payload.data.bookingId : 'mivis-alert',
+        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 450],
+        requireInteraction: true,
+        data: {
+            url: (payload.data && payload.data.url) ? payload.data.url : '/'
+        }
+    };
+    return self.registration.showNotification(notificationTitle, notificationOptions);
 });

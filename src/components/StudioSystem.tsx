@@ -2279,7 +2279,8 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
                     // --- 🔑 FCM TOKEN REGISTRATION ---
                     if (messaging) {
                         try {
-                            const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+                            // Wait for the service worker to be ready
+                            const reg = await navigator.serviceWorker.ready;
                             const token = await getToken(messaging, { 
                                 vapidKey: 'BOfd8r3lGPnkkIGy9Dn7TMjPQXNqolEjVzxJg7tFTvpB25Gi9JGq29tpl3KE0EusY6GgUPaIDSMzyeyVRm0NhVY',
                                 serviceWorkerRegistration: reg

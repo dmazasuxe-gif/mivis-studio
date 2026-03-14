@@ -1485,8 +1485,8 @@ export default function StudioSystem() {
                         </Modal>
                     )}
                 </AnimatePresence>
-                {/* 🔔 GLOBAL WORKER ALARM LISTENER (Stays active if logged in) */}
-                {currentWorker && <WorkerAlarmListener workerId={currentWorker.id} />}
+                {/* 🔔 GLOBAL NOTIFICATION ASSISTANT (Smart adaptive logic) */}
+            {currentWorker && <SmartNotificationAssistant workerId={currentWorker.id} />}
             </main >
             <style jsx global>{` .input-modern { @apply w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500 transition-colors placeholder:text-white/20; } .btn-primary { @apply bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-yellow-900/40 hover:scale-[1.02] transition-transform; } .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; } .calendar-fix { color-scheme: dark; } `}</style></div >
     );
@@ -2263,91 +2263,108 @@ function NavBtn({ icon, label, active, onClick }: NavBtnProps) { return (<button
 
 function Modal({ children, onClose }: { children: React.ReactNode, onClose: () => void }) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }
 
-function WorkerAlarmListener({ workerId }: { workerId: string }) {
+function SmartNotificationAssistant({ workerId }: { workerId: string }) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
     const [isStandalone, setIsStandalone] = useState(false);
-    const [showDebug, setShowDebug] = useState(false);
+    const [permission, setPermission] = useState<NotificationPermission>('default');
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const standalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
-            setIsStandalone(standalone);
+        if (typeof window === 'undefined') return;
+
+        // 1. Detect Platform
+        const ua = navigator.userAgent.toLowerCase();
+        if (/iphone|ipad|ipod/.test(ua)) setPlatform('ios');
+        else if (/android/.test(ua)) setPlatform('android');
+
+        // 2. Detect Standalone (PWA)
+        const standalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+        setIsStandalone(standalone);
+
+        // 3. Check Permission
+        if ('Notification' in window) {
+            setPermission(Notification.permission);
         }
+
+        // 4. Initialize Keep-alive audio
+        const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFav7//7//v/+/v/9WQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+        audio.loop = true;
+        audio.volume = 0.001;
+        audioRef.current = audio;
     }, []);
 
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFav7//7//v/+/v/9WQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
-            audio.loop = true;
-            audio.volume = 0.001; 
-            audioRef.current = audio;
-        }
-    }, []);
-
-    const enableNotifications = async () => {
+    const enableSystem = async () => {
         if (audioRef.current) {
-            audioRef.current.play().catch(e => console.log("Audio play blocked", e));
+            audioRef.current.play().catch(() => {});
         }
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-            try {
-                const res = await Notification.requestPermission();
-                alert(`Permiso: ${res}`);
-            } catch (e) {
-                alert("Error al pedir permiso");
+
+        if ('Notification' in window) {
+            const res = await Notification.requestPermission();
+            setPermission(res);
+            if (res === 'granted') {
+                new Notification("¡Sistema Activado!", { body: "Recibirás avisos de nuevas citas aquí." });
             }
-        } else if (isIOS) {
-            alert("En iPhone, debes 'Agregar a inicio' primero para activar las notificaciones.");
+        } else if (platform === 'ios' && !isStandalone) {
+            alert("En iPhone, primero debes usar 'Agregar a inicio' desde el botón Compartir.");
         }
         
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-            navigator.vibrate(200);
+        if ('vibrate' in navigator) {
+            navigator.vibrate(100);
         }
     };
 
-    const hasNotificationSupport = typeof window !== 'undefined' && 'Notification' in window;
-    const isIOS = typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const currentPermission = hasNotificationSupport ? Notification.permission : 'default';
+    if (permission === 'granted' && (platform !== 'ios' || isStandalone)) {
+        return (
+            <div className="fixed bottom-4 right-4 z-[9999] pointer-events-none">
+                <div className="bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-4 py-2 rounded-full border border-emerald-500/20 backdrop-blur-md flex items-center gap-1 shadow-lg">
+                    <CheckCircle2 className="w-3 h-3" /> SISTEMA DE AVISOS ACTIVO
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed bottom-4 right-4 z-[9999] pointer-events-none">
-            <div className="pointer-events-auto flex flex-col items-end gap-3">
-                {/* iPhone specific instructions */}
-                {isIOS && !isStandalone && (
-                    <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-emerald-950/90 backdrop-blur-xl border-2 border-yellow-500/50 p-4 rounded-[2rem] text-[11px] text-white max-w-[220px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-yellow-500 font-bold">
-                            <Zap className="w-4 h-4 fill-current" />
-                            <span>IMPORTANTE IPHONE</span>
+            <div className="pointer-events-auto flex flex-col items-end gap-3 max-w-[260px]">
+                {/* iPhone Instructions (Only if not in PWA mode) */}
+                {platform === 'ios' && !isStandalone && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }} 
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-[#0a1f1a]/95 border-2 border-yellow-500/40 p-5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl"
+                    >
+                        <div className="flex items-center gap-2 mb-3 text-yellow-500 font-bold text-xs">
+                            <Zap className="w-4 h-4" /> IPHONE CONFIGURATION
                         </div>
-                        <p>Para recibir notificaciones:</p>
-                        <ol className="list-decimal list-inside space-y-1 opacity-90">
-                            <li>Pulsa el botón <strong>Compartir</strong> <span className="inline-block p-1 bg-white/10 rounded">↑</span></li>
-                            <li>Selecciona <strong>"Agregar a inicio"</strong></li>
-                            <li>Abre el sistema desde tu pantalla</li>
-                        </ol>
+                        <p className="text-[11px] text-white/80 leading-relaxed mb-4">
+                            Para recibir avisos en tu iPhone, sigue estos 2 pasos:
+                        </p>
+                        <div className="space-y-4">
+                            <div className="flex gap-3 items-start">
+                                <div className="w-6 h-6 rounded-full bg-yellow-500 text-black flex items-center justify-center font-bold text-xs shrink-0">1</div>
+                                <p className="text-[10px] text-white">Pulsa el botón <strong>Compartir</strong> (un cuadrado con flecha ↑)</p>
+                            </div>
+                            <div className="flex gap-3 items-start">
+                                <div className="w-6 h-6 rounded-full bg-yellow-500 text-black flex items-center justify-center font-bold text-xs shrink-0">2</div>
+                                <p className="text-[10px] text-white">Selecciona <strong>"Agregar a inicio"</strong> y abre el sistema desde ahí.</p>
+                            </div>
+                        </div>
                     </motion.div>
                 )}
 
-                <div className="flex flex-col gap-2 items-end">
-                    {/* Always show button on iOS Safari to force permission check */}
-                    {(!isStandalone && isIOS) || currentPermission !== 'granted' ? (
-                        <button 
-                            onClick={enableNotifications} 
-                            className="bg-yellow-500 hover:bg-yellow-400 text-black text-[11px] font-black px-6 py-3 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] flex items-center gap-2 transition-all active:scale-95"
-                        >
-                            <div className="relative">
-                                <span className="absolute inset-0 animate-ping rounded-full bg-black/20"></span>
-                                <Zap className="w-4 h-4 relative z-10" />
-                            </div>
-                            ACTIVAR AVISOS 🔔
-                        </button>
-                    ) : (
-                        <div className="flex flex-col items-end gap-2">
-                            <div className="bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-4 py-2 rounded-full border border-emerald-500/20 backdrop-blur-md flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> LISTO PARA RECIBIR CITAS
-                            </div>
+                {/* Normal Activation Button (For Android or iOS Standalone) */}
+                {(platform === 'android' || (platform === 'ios' && isStandalone) || platform === 'desktop') && (
+                    <button 
+                        onClick={enableSystem}
+                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black text-xs px-8 py-4 rounded-full shadow-[0_15px_30px_rgba(234,179,8,0.3)] flex items-center gap-3 transition-all active:scale-95 group"
+                    >
+                        <div className="relative">
+                            <span className="absolute inset-0 animate-ping rounded-full bg-black/20 group-hover:bg-black/40"></span>
+                            <Zap className="w-5 h-5 relative z-10" />
                         </div>
-                    )}
-                </div>
+                        RECIBIR AVISOS DE CITAS 🔔
+                    </button>
+                )}
             </div>
         </div>
     );

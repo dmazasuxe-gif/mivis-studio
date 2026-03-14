@@ -189,55 +189,54 @@ export default function StudioSystem() {
     useEffect(() => {
         if (!currentWorker || bookings.length === 0) return;
 
-        // 1. Initial Load: Mark current active bookings as "already seen"
+        // 1. Initial Load: Filter confirmed bookings for THIS worker
         if (!alarmInitialized) {
-            const existingIds = new Set(
+            const initialIds = new Set(
                 bookings
                     .filter(b => b.professionalId === currentWorker.id && b.status === 'confirmed')
                     .map(b => b.id)
             );
-            setNotifiedBookings(existingIds);
+            setNotifiedBookings(initialIds);
             setAlarmInitialized(true);
             return;
         }
 
-        // 2. Real-time Check: Compare current bookings with already notified ones
+        // 2. Real-time Monitoring
         bookings.forEach(b => {
+            // Check if it's a confirmed booking for current worker that we haven't notified yet
             if (b.professionalId === currentWorker.id && b.status === 'confirmed' && !notifiedBookings.has(b.id)) {
-                // 🚨 NEW APPOINTMENT!
+                
+                // Content for the notification
                 const bookingTime = b.date instanceof Date ? b.date : new Date(b.date);
                 const timeStr = bookingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                // Content requested by user
-                const msg = `Tienes una nueva cita a las ${timeStr} para: ${b.service}.`;
+                const msg = `¡Nueva Cita! 🕒 ${timeStr} - ${b.service}`;
 
-                // Show Notification
+                // Mark as notified immediately to prevent double alerts
+                setNotifiedBookings(prev => new Set(prev).add(b.id));
+
+                // TRIGGER ALERT!
                 if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
                     const options = {
                         body: msg,
-                        icon: "/favicon.ico",
+                        icon: "/logo.png",
                         tag: b.id,
-                        requireInteraction: true,
-                        vibrate: [200, 100, 200, 100, 200]
+                        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 450],
+                        requireInteraction: true
                     };
-                    
+
                     if ('serviceWorker' in navigator) {
                         navigator.serviceWorker.ready.then(reg => {
-                            reg.showNotification("Mivis Studio - Nueva Cita", options);
+                            reg.showNotification("Mivis Studio 💅", options);
                         });
                     } else {
-                        const n = new Notification("Mivis Studio - Nueva Cita", options);
-                        n.onclick = () => { window.focus(); n.close(); };
+                        new Notification("Mivis Studio 💅", options);
                     }
                 }
 
                 // Vibrate device
                 if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-                    navigator.vibrate([300, 100, 300, 100, 300]);
+                    navigator.vibrate([500, 200, 500, 200, 500]);
                 }
-
-                // Mark as notified
-                setNotifiedBookings(prev => new Set(prev).add(b.id));
             }
         });
     }, [bookings, currentWorker, alarmInitialized, notifiedBookings]);
@@ -2272,21 +2271,21 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
-        // 1. Detect Platform
+        // Detect Platform
         const ua = navigator.userAgent.toLowerCase();
         if (/iphone|ipad|ipod/.test(ua)) setPlatform('ios');
         else if (/android/.test(ua)) setPlatform('android');
 
-        // 2. Detect Standalone (PWA)
-        const standalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
-        setIsStandalone(standalone);
+        // Detect Standalone (PWA)
+        const isPWA = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+        setIsStandalone(isPWA);
 
-        // 3. Check Permission
+        // Check Notification Permission
         if ('Notification' in window) {
             setPermission(Notification.permission);
         }
 
-        // 4. Initialize Keep-alive audio
+        // Initialize Keep-alive silent audio
         const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFav7//7//v/+/v/9WQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
         audio.loop = true;
         audio.volume = 0.001;
@@ -2294,77 +2293,99 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
     }, []);
 
     const enableSystem = async () => {
+        // Start keep-alive audio
         if (audioRef.current) {
             audioRef.current.play().catch(() => {});
         }
 
+        // Request Notification Permission
         if ('Notification' in window) {
-            const res = await Notification.requestPermission();
-            setPermission(res);
-            if (res === 'granted') {
-                new Notification("¡Sistema Activado!", { body: "Recibirás avisos de nuevas citas aquí." });
+            try {
+                const res = await Notification.requestPermission();
+                setPermission(res);
+                if (res === 'granted') {
+                    // Send test notification
+                    const opt = { body: "Prueba: El sistema de avisos de Mivis Studio está 100% activo.", icon: "/logo.png", vibrate: [200, 100, 200] };
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then(reg => reg.showNotification("¡Sistema Activado!", opt));
+                    } else {
+                        new Notification("¡Sistema Activado!", opt);
+                    }
+                } else if (res === 'denied') {
+                    alert("⚠️ Notificaciones bloqueadas. Por favor, actívalas en la configuración de tu navegador.");
+                }
+            } catch (e) {
+                console.error("Error requesting notification permission:", e);
             }
         } else if (platform === 'ios' && !isStandalone) {
-            alert("En iPhone, primero debes usar 'Agregar a inicio' desde el botón Compartir.");
+            alert("En iPhone, debes pulsar 'Compartir' -> 'Agregar a inicio' para poder recibir avisos.");
         }
-        
+
+        // Vibrate to confirm feedback
         if ('vibrate' in navigator) {
-            navigator.vibrate(100);
+            navigator.vibrate(200);
         }
     };
 
-    if (permission === 'granted' && (platform !== 'ios' || isStandalone)) {
-        return (
-            <div className="fixed bottom-4 right-4 z-[9999] pointer-events-none">
-                <div className="bg-emerald-500/10 text-emerald-400 text-[9px] font-bold px-4 py-2 rounded-full border border-emerald-500/20 backdrop-blur-md flex items-center gap-1 shadow-lg">
-                    <CheckCircle2 className="w-3 h-3" /> SISTEMA DE AVISOS ACTIVO
-                </div>
-            </div>
-        );
-    }
+    const sendTestAlert = () => {
+        if (permission !== 'granted') return alert("Primero debes 'Activar Avisos'");
+        const opt = { body: "Esta es una prueba de cita nueva. Si ves esto, estarás recibiendo tus avisos correctamente.", icon: "/logo.png", vibrate: [500, 200, 500] };
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(reg => reg.showNotification("PRUEBA EXITOSA ✅", opt));
+        } else {
+            new Notification("PRUEBA EXITOSA ✅", opt);
+        }
+        if ('vibrate' in navigator) navigator.vibrate([500, 200, 500]);
+    };
+
+    const showActivationButton = (!isStandalone && platform === 'ios') || permission !== 'granted';
 
     return (
         <div className="fixed bottom-4 right-4 z-[9999] pointer-events-none">
-            <div className="pointer-events-auto flex flex-col items-end gap-3 max-w-[260px]">
-                {/* iPhone Instructions (Only if not in PWA mode) */}
+            <div className="pointer-events-auto flex flex-col items-end gap-3 max-w-[280px]">
+                
+                {/* iPhone Manual Instructions (Only if not in PWA) */}
                 {platform === 'ios' && !isStandalone && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }} 
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-[#0a1f1a]/95 border-2 border-yellow-500/40 p-5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl"
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+                        className="bg-emerald-950/95 border-2 border-yellow-500/50 p-5 rounded-[2.5rem] shadow-2xl backdrop-blur-xl"
                     >
-                        <div className="flex items-center gap-2 mb-3 text-yellow-500 font-bold text-xs">
-                            <Zap className="w-4 h-4" /> IPHONE CONFIGURATION
+                        <div className="flex items-center gap-2 mb-3 text-yellow-500 font-bold text-xs uppercase tracking-widest">
+                            <Zap className="w-4 h-4 fill-current" /> IPHONE CONFIG
                         </div>
-                        <p className="text-[11px] text-white/80 leading-relaxed mb-4">
-                            Para recibir avisos en tu iPhone, sigue estos 2 pasos:
-                        </p>
                         <div className="space-y-4">
                             <div className="flex gap-3 items-start">
-                                <div className="w-6 h-6 rounded-full bg-yellow-500 text-black flex items-center justify-center font-bold text-xs shrink-0">1</div>
-                                <p className="text-[10px] text-white">Pulsa el botón <strong>Compartir</strong> (un cuadrado con flecha ↑)</p>
+                                <span className="bg-yellow-500 text-black w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                                <p className="text-[10px] text-white">Pulsa el botón <strong>Compartir</strong> (cuadro con flechita ↑)</p>
                             </div>
                             <div className="flex gap-3 items-start">
-                                <div className="w-6 h-6 rounded-full bg-yellow-500 text-black flex items-center justify-center font-bold text-xs shrink-0">2</div>
-                                <p className="text-[10px] text-white">Selecciona <strong>"Agregar a inicio"</strong> y abre el sistema desde ahí.</p>
+                                <span className="bg-yellow-500 text-black w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                                <p className="text-[10px] text-white">Selecciona <strong>"Agregar a inicio"</strong> y ábrelo desde tu pantalla.</p>
                             </div>
                         </div>
                     </motion.div>
                 )}
 
-                {/* Normal Activation Button (For Android or iOS Standalone) */}
-                {(platform === 'android' || (platform === 'ios' && isStandalone) || platform === 'desktop') && (
-                    <button 
-                        onClick={enableSystem}
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-black text-xs px-8 py-4 rounded-full shadow-[0_15px_30px_rgba(234,179,8,0.3)] flex items-center gap-3 transition-all active:scale-95 group"
-                    >
-                        <div className="relative">
-                            <span className="absolute inset-0 animate-ping rounded-full bg-black/20 group-hover:bg-black/40"></span>
-                            <Zap className="w-5 h-5 relative z-10" />
+                {/* Status or Action Button */}
+                <div className="flex flex-col gap-2 items-end">
+                    {showActivationButton ? (
+                        <button onClick={enableSystem} className="bg-yellow-500 hover:bg-yellow-400 text-black font-black text-[11px] px-8 py-4 rounded-full shadow-[0_15px_40px_rgba(234,179,8,0.4)] flex items-center gap-2 transition-all active:scale-95 group">
+                            <div className="relative">
+                                <span className="absolute inset-0 animate-ping rounded-full bg-black/20"></span>
+                                <Zap className="w-5 h-5 relative z-10" />
+                            </div>
+                            {platform === 'ios' && !isStandalone ? "Sigue los pasos de arriba ↑" : "ACTIVAR AVISOS DE CITAS 🔔"}
+                        </button>
+                    ) : (
+                        <div className="flex flex-col items-end gap-2">
+                             <div className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-5 py-2 rounded-full border border-emerald-500/30 backdrop-blur-md flex items-center gap-2 shadow-xl">
+                                <CheckCircle2 className="w-4 h-4" /> SISTEMA CONECTADO ✅
+                            </div>
+                            <button onClick={sendTestAlert} className="bg-white/5 hover:bg-white/10 text-white/60 text-[9px] px-4 py-1.5 rounded-full border border-white/10 transition-colors uppercase tracking-widest font-bold">
+                                Hacer prueba de sonido/vibración
+                            </button>
                         </div>
-                        RECIBIR AVISOS DE CITAS 🔔
-                    </button>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

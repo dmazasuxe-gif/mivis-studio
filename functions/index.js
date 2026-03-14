@@ -31,10 +31,14 @@ exports.sendBookingNotification = functions.firestore
         const day = bookingTime.getDate().toString().padStart(2, '0');
         const month = (bookingTime.getMonth() + 1).toString().padStart(2, '0');
         const year = bookingTime.getFullYear();
-        const hour = bookingTime.getHours();
-        const ampm = hour >= 12 ? 'pm' : 'am';
         
-        const dateStr = `${day}/${month}/${year} ${ampm}`;
+        let hh = bookingTime.getHours();
+        const mm = bookingTime.getMinutes().toString().padStart(2, '0');
+        const ampm = hh >= 12 ? 'pm' : 'am';
+        hh = hh % 12;
+        hh = hh ? hh : 12; // hour '0' should be '12'
+        
+        const dateStr = `${day}/${month}/${year} ${hh}.${mm}${ampm}`;
 
         // 6. Construct Message
         const message = {
@@ -49,9 +53,15 @@ exports.sendBookingNotification = functions.firestore
             token: fcmToken,
             android: {
                 priority: "high",
-                notification: { sound: "default" }
+                notification: { 
+                    sound: "default",
+                    tag: context.params.bookingId // Ensure one notification per booking
+                }
             },
             apns: {
+                headers: {
+                    "apns-collapse-id": context.params.bookingId
+                },
                 payload: {
                     aps: {
                         sound: "default",

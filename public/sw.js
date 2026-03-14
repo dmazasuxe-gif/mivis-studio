@@ -16,18 +16,9 @@ const messaging = firebase.messaging();
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
     console.log('[sw.js] Mensaje recibido en segundo plano: ', payload);
-    const notificationTitle = payload.notification.title || 'Mivis Studio 💅';
-    const notificationOptions = {
-        body: payload.notification.body,
-        icon: '/logo.png',
-        badge: '/logo.png',
-        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 450],
-        requireInteraction: true,
-        data: {
-            url: (payload.data && payload.data.url) ? payload.data.url : '/'
-        }
-    };
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    // Note: We don't call showNotification manually here because the 
+    // FCM payload already includes a 'notification' object which the 
+    // browser handles automatically in the background.
 });
 
 // Standard SW events

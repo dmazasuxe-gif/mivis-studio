@@ -14,16 +14,5 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-    const notificationTitle = payload.notification.title || 'Mivis Studio 💅';
-    const notificationOptions = {
-        body: payload.notification.body,
-        icon: '/logo.png',
-        badge: '/logo.png',
-        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 450],
-        requireInteraction: true,
-        data: {
-            url: (payload.data && payload.data.url) ? payload.data.url : '/'
-        }
-    };
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    // Note: Manual notification disabled to avoid duplicates with automatic FCM behavior.
 });

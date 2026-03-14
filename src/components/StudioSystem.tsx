@@ -2299,6 +2299,21 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
         // Start keep-alive audio
         if (audioRef.current) {
             audioRef.current.play().catch(() => {});
+            
+            // Re-check periodically to prevent iOS suspension
+            const checkInterval = setInterval(() => {
+                if (audioRef.current && audioRef.current.paused && permission === 'granted') {
+                    audioRef.current.play().catch(() => {});
+                }
+            }, 5000);
+
+            // Visibility change handling
+            const handleVisibility = () => {
+                if (document.visibilityState === 'visible' && audioRef.current && audioRef.current.paused) {
+                    audioRef.current.play().catch(() => {});
+                }
+            };
+            document.addEventListener('visibilitychange', handleVisibility);
         }
 
         // Request Notification Permission

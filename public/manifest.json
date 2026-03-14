@@ -2,20 +2,25 @@
   "name": "Mivis Studio",
   "short_name": "Mivis",
   "description": "Salón de Belleza & Spa",
-  "start_url": "/",
+  "start_url": "./",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0f2a24",
   "theme_color": "#0f2a24",
   "icons": [
     {
       "src": "/logo.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/logo.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

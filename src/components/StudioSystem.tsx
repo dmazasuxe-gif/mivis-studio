@@ -723,6 +723,9 @@ export default function StudioSystem() {
                         )}
                     </div>
                 </main>
+
+                {/* 🔔 GLOBAL NOTIFICATION ASSISTANT (Worker Mode) */}
+                {currentWorker && <SmartNotificationAssistant workerId={currentWorker.id} />}
             </div>
         );
     }
@@ -2340,8 +2343,20 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
 
     const showActivationButton = (!isStandalone && platform === 'ios') || permission !== 'granted';
 
+    // Render a simplified status if notifications are active and not on iOS non-standalone
+    if (permission === 'granted' && (platform !== 'ios' || isStandalone)) {
+        return (
+            <div className="fixed bottom-6 right-6 z-[100000] pointer-events-none">
+                <div className="bg-emerald-500/30 text-emerald-400 text-[10px] font-bold px-5 py-2.5 rounded-full border-2 border-emerald-500/40 backdrop-blur-xl flex items-center gap-2 shadow-[0_0_30px_rgba(16,185,129,0.3)] animate-in fade-in slide-in-from-bottom-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                    NOTIFICACIONES ACTIVAS ✅
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="fixed bottom-4 right-4 z-[9999] pointer-events-none">
+        <div className="fixed bottom-6 right-6 z-[100000] pointer-events-none">
             <div className="pointer-events-auto flex flex-col items-end gap-3 max-w-[280px]">
                 
                 {/* iPhone Manual Instructions (Only if not in PWA) */}

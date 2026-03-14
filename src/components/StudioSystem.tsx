@@ -187,60 +187,13 @@ export default function StudioSystem() {
     }, []);
 
     // 🔔 GLOBAL WORKER NOTIFICATION SYSTEM
+    // Disabled: Now handled by Cloud Functions for better reliability and avoiding duplicates.
+    /*
     useEffect(() => {
         if (!currentWorker || bookings.length === 0) return;
-
-        // 1. Initial Load: Filter confirmed bookings for THIS worker
-        if (!alarmInitialized) {
-            const initialIds = new Set(
-                bookings
-                    .filter(b => b.professionalId === currentWorker.id && b.status === 'confirmed')
-                    .map(b => b.id)
-            );
-            setNotifiedBookings(initialIds);
-            setAlarmInitialized(true);
-            return;
-        }
-
-        // 2. Real-time Monitoring
-        bookings.forEach(b => {
-            // Check if it's a confirmed booking for current worker that we haven't notified yet
-            if (b.professionalId === currentWorker.id && b.status === 'confirmed' && !notifiedBookings.has(b.id)) {
-                
-                // Content for the notification
-                const bookingTime = b.date instanceof Date ? b.date : new Date(b.date);
-                const timeStr = bookingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const msg = `¡Nueva Cita! 🕒 ${timeStr} - ${b.service}`;
-
-                // Mark as notified immediately to prevent double alerts
-                setNotifiedBookings(prev => new Set(prev).add(b.id));
-
-                // TRIGGER ALERT!
-                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-                    const options = {
-                        body: msg,
-                        icon: "/logo.png",
-                        tag: b.id,
-                        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 450],
-                        requireInteraction: true
-                    };
-
-                    if ('serviceWorker' in navigator) {
-                        navigator.serviceWorker.ready.then(reg => {
-                            reg.showNotification("Mivis Studio 💅", options);
-                        });
-                    } else {
-                        new Notification("Mivis Studio 💅", options);
-                    }
-                }
-
-                // Vibrate device
-                if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-                    navigator.vibrate([500, 200, 500, 200, 500]);
-                }
-            }
-        });
+        // ... local alert logic removed ...
     }, [bookings, currentWorker, alarmInitialized, notifiedBookings]);
+    */
 
     // --- LOGIC ---
 

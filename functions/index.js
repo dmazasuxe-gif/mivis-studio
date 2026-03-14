@@ -4,42 +4,52 @@ admin.initializeApp();
 
 exports.sendBookingNotification = functions.firestore
     .document("bookings/{bookingId}")
-    .onCreate(async (snapshot, context) => {
-        const booking = snapshot.data();
-        const professionalId = booking.professionalId;
+    .onWrite(async (change, context) => {
+        const newData = change.after.exists ? change.after.data() : null;
+        const oldData = change.before.exists ? change.before.data() : null;
 
-        if (!professionalId) return null;
+        // 1. Exit if deleted or no professional assigned
+        if (!newData || !newData.professionalId) return null;
 
-        // 1. Get the worker's FCM token
-        const workerDoc = await admin.firestore().collection("employees").doc(professionalId).get();
-        if (!workerDoc.exists) return null;
+        // 2. Logic: Only notify if it's NEW and CONFIRMED, OR if it CHANGED from pending to confirmed
+        const isNewAndConfirmed = !oldData && newData.status === 'confirmed';
+        const wasJustConfirmed = oldData && oldData.status !== 'confirmed' && newData.status === 'confirmed';
 
-        const workerData = workerDoc.data();
-        const fcmToken = workerData.fcmToken;
+        // 3. Prevent self-triggering or multiple triggers
+        if (!isNewAndConfirmed && !wasJustConfirmed) return null;
 
-        if (!fcmToken) {
-            console.log(`No FCM token found for worker ${professionalId}`);
+        // 4. Get Worker Token
+        const workerDoc = await admin.firestore().collection("employees").doc(newData.professionalId).get();
+        if (!workerDoc.exists || !workerDoc.data().fcmToken) {
+            console.log(`No se encontró token para el trabajador ${newData.professionalId}`);
             return null;
         }
+        const fcmToken = workerDoc.data().fcmToken;
 
-        // 2. Prepare the notification
-        const bookingTime = booking.date.toDate ? booking.date.toDate() : new Date(booking.date);
-        const timeStr = bookingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // 5. Format Date & Time
+        const bookingTime = newData.date.toDate ? newData.date.toDate() : new Date(newData.date);
+        const day = bookingTime.getDate().toString().padStart(2, '0');
+        const month = (bookingTime.getMonth() + 1).toString().padStart(2, '0');
+        const year = bookingTime.getFullYear();
+        const hour = bookingTime.getHours();
+        const ampm = hour >= 12 ? 'pm' : 'am';
+        
+        const dateStr = `${day}/${month}/${year} ${ampm}`;
 
+        // 6. Construct Message
         const message = {
             notification: {
-                title: "¡Nueva Cita! 💅",
-                body: `Tienes una cita a las ${timeStr} para: ${booking.service}`,
+                title: "¡Nueva Cita! 🕒",
+                body: `${dateStr}. cliente: ${newData.clientName} (${newData.service})`,
             },
             data: {
                 url: "/",
+                bookingId: context.params.bookingId
             },
             token: fcmToken,
             android: {
                 priority: "high",
-                notification: {
-                    sound: "default"
-                }
+                notification: { sound: "default" }
             },
             apns: {
                 payload: {
@@ -52,47 +62,13 @@ exports.sendBookingNotification = functions.firestore
             }
         };
 
-        // 3. Send the notification
         try {
-            const response = await admin.messaging().send(message);
-            console.log("Successfully sent message:", response);
-            return response;
+            await admin.messaging().send(message);
+            console.log(`Notificación enviada a ${newData.professionalId} para la cita ${context.params.bookingId}`);
         } catch (error) {
-            console.error("Error sending message:", error);
-            return null;
-        }
-    });
-
-exports.onBookingUpdate = functions.firestore
-    .document("bookings/{bookingId}")
-    .onUpdate(async (change, context) => {
-        const newData = change.after.data();
-        const oldData = change.before.data();
-
-        // Only trigger if status changed to confirmed
-        if (newData.status === 'confirmed' && oldData.status !== 'confirmed') {
-            const professionalId = newData.professionalId;
-            if (!professionalId) return null;
-
-            const workerDoc = await admin.firestore().collection("employees").doc(professionalId).get();
-            if (!workerDoc.exists) return null;
-
-            const fcmToken = workerDoc.data().fcmToken;
-            if (!fcmToken) return null;
-
-            const bookingTime = newData.date.toDate ? newData.date.toDate() : new Date(newData.date);
-            const timeStr = bookingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            const message = {
-                notification: {
-                    title: "Cita Confirmada ✅",
-                    body: `Nueva cita a las ${timeStr} para: ${newData.service}`,
-                },
-                token: fcmToken,
-                apns: { payload: { aps: { sound: "default", contentAvailable: true } } }
-            };
-
-            return admin.messaging().send(message);
+            console.error("Error enviando FCM:", error);
         }
         return null;
     });
+
+// Removed redundant onBookingUpdate

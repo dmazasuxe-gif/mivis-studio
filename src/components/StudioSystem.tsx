@@ -11,10 +11,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Playfair_Display, Inter } from 'next/font/google';
 
 // 🔥 FIREBASE IMPORTS
-import { db } from '@/lib/firebase';
+import { db, messaging } from '@/lib/firebase';
 import {
     initializeApp, getApps, getApp
 } from "firebase/app";
+import { getToken } from 'firebase/messaging';
 import {
     collection, addDoc, deleteDoc, updateDoc, doc,
     onSnapshot, query, orderBy, getDocs, getDoc, setDoc, enableIndexedDbPersistence, where
@@ -2322,6 +2323,23 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
                 const res = await Notification.requestPermission();
                 setPermission(res);
                 if (res === 'granted') {
+                    // --- 🔑 FCM TOKEN REGISTRATION ---
+                    if (messaging) {
+                        try {
+                            const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+                            const token = await getToken(messaging, { 
+                                vapidKey: 'BOfd8r3lGPnkkIGy9Dn7TMjPQXNqolEjVzxJg7tFTvpB25Gi9JGq29tpl3KE0EusY6GgUPaIDSMzyeyVRm0NhVY',
+                                serviceWorkerRegistration: reg
+                            });
+                            if (token) {
+                                await updateDoc(doc(db, "employees", workerId), { fcmToken: token });
+                                console.log("FCM Token registrado con SW compartido:", token);
+                            }
+                        } catch (fcmErr) {
+                            console.error("Error al obtener token FCM:", fcmErr);
+                        }
+                    }
+
                     // Send test notification
                     const opt = { body: "Prueba: El sistema de avisos de Mivis Studio está 100% activo.", icon: "/logo.png", vibrate: [200, 100, 200] };
                     if ('serviceWorker' in navigator) {

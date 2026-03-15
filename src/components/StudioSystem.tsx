@@ -2225,6 +2225,24 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
     const [isStandalone, setIsStandalone] = useState(false);
     const [permission, setPermission] = useState<NotificationPermission>('default');
 
+    const registerFCMToken = async () => {
+        if (messaging && workerId) {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const token = await getToken(messaging, { 
+                    vapidKey: 'BOfd8r3lGPnkkIGy9Dn7TMjPQXNqolEjVzxJg7tFTvpB25Gi9JGq29tpl3KE0EusY6GgUPaIDSMzyeyVRm0NhVY',
+                    serviceWorkerRegistration: reg
+                });
+                if (token) {
+                    await updateDoc(doc(db, "employees", workerId), { fcmToken: token });
+                    console.log("FCM Token synchronized");
+                }
+            } catch (err) {
+                console.error("FCM sync error:", err);
+            }
+        }
+    };
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
@@ -2239,7 +2257,12 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
 
         // Check Notification Permission
         if ('Notification' in window) {
-            setPermission(Notification.permission);
+            const p = Notification.permission;
+            setPermission(p);
+            // Automatic sync if already granted
+            if (p === 'granted') {
+                registerFCMToken();
+            }
         }
 
         // Initialize Keep-alive silent audio
@@ -2247,7 +2270,7 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
         audio.loop = true;
         audio.volume = 0.001;
         audioRef.current = audio;
-    }, []);
+    }, [workerId]);
 
     const enableSystem = async () => {
         // Start keep-alive audio
@@ -2276,39 +2299,13 @@ function SmartNotificationAssistant({ workerId }: { workerId: string }) {
                 const res = await Notification.requestPermission();
                 setPermission(res);
                 if (res === 'granted') {
-                    // --- 🔑 FCM TOKEN REGISTRATION ---
-                    if (messaging) {
-                        try {
-                            // Wait for the service worker to be ready
-                            const reg = await navigator.serviceWorker.ready;
-                            const token = await getToken(messaging, { 
-                                vapidKey: 'BOfd8r3lGPnkkIGy9Dn7TMjPQXNqolEjVzxJg7tFTvpB25Gi9JGq29tpl3KE0EusY6GgUPaIDSMzyeyVRm0NhVY',
-                                serviceWorkerRegistration: reg
-                            });
-                            if (token) {
-                                await updateDoc(doc(db, "employees", workerId), { fcmToken: token });
-                                console.log("FCM Token registrado con SW compartido:", token);
-                            }
-                        } catch (fcmErr) {
-                            console.error("Error al obtener token FCM:", fcmErr);
-                        }
-                    }
-
-                    // Send test notification
-                    const opt = { body: "Prueba: El sistema de avisos de Mivis Studio está 100% activo.", icon: "/logo.png", vibrate: [200, 100, 200] };
-                    if ('serviceWorker' in navigator) {
-                        navigator.serviceWorker.ready.then(reg => reg.showNotification("¡Sistema Activado!", opt));
-                    } else {
-                        new Notification("¡Sistema Activado!", opt);
-                    }
+                    await registerFCMToken();
                 } else if (res === 'denied') {
                     alert("⚠️ Notificaciones bloqueadas. Por favor, actívalas en la configuración de tu navegador.");
                 }
             } catch (e) {
                 console.error("Error requesting notification permission:", e);
             }
-        } else if (platform === 'ios' && !isStandalone) {
-            alert("En iPhone, debes pulsar 'Compartir' -> 'Agregar a inicio' para poder recibir avisos.");
         }
 
         // Vibrate to confirm feedback

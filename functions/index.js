@@ -43,8 +43,7 @@ exports.sendBookingNotification = functions.firestore
         const message = {
             notification: {
                 title: "¡Nueva Cita! 🕒",
-                body: fullMsg,
-                clickAction: "/", // Compatibility for some Android browsers
+                body: fullMsg
             },
             data: {
                 url: "/",
@@ -55,7 +54,26 @@ exports.sendBookingNotification = functions.firestore
                 priority: "high",
                 notification: { 
                     sound: "default",
-                    tag: context.params.bookingId 
+                    tag: context.params.bookingId,
+                    clickAction: "/"
+                }
+            },
+            webpush: {
+                headers: {
+                    Urgency: "high"
+                },
+                notification: {
+                    body: fullMsg,
+                    icon: "/logo.png",
+                    tag: context.params.bookingId,
+                    requireInteraction: true,
+                    vibrate: [500, 110, 500, 110, 450],
+                    actions: [
+                        { action: "open", title: "Ver Cita" }
+                    ]
+                },
+                fcm_options: {
+                    link: "/"
                 }
             },
             apns: {

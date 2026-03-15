@@ -15,24 +15,19 @@ const messaging = firebase.messaging();
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-    console.log('[sw.js] Mensaje recibido en segundo plano: ', payload);
-    
     const notificationTitle = payload.notification.title || 'Mivis Studio 💅';
     const notificationOptions = {
         body: payload.notification.body,
         icon: '/logo.png',
         badge: '/logo.png',
-        // --- 🛡️ ANTI-DUPLICATE TAG ---
         tag: (payload.data && payload.data.bookingId) ? payload.data.bookingId : 'mivis-alert',
-        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 450],
+        renotify: true,
+        vibrate: [500, 110, 500],
         requireInteraction: true,
         data: {
             url: (payload.data && payload.data.url) ? payload.data.url : '/'
         }
     };
-
-    // On Android, we MUST call showNotification if we want to ensure it appears
-    // The 'tag' prevents showing the same notification twice if both FCM and this listener trigger
     return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 

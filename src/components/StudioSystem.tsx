@@ -255,7 +255,7 @@ export default function StudioSystem() {
     };
 
     // ... (Resto de Handlers CRUD igual que antes, simplificados para brevedad) ...
-    const handleRegisterExpense = async (newExp: any) => await addDoc(collection(db, "expenses"), { ...newExp, date: new Date() });
+    const handleRegisterExpense = async (newExp: any) => await addDoc(collection(db, "expenses"), { ...newExp, date: newExp.date || new Date() });
     const handleDeleteExpense = async (id: string) => { if (confirm('¿Eliminar gasto?')) await deleteDoc(doc(db, "expenses", id)); };
     // FIX: Employee Create now closes modal
     const handleCreateEmployee = async () => {
@@ -492,15 +492,15 @@ export default function StudioSystem() {
     // 1. LANDING PAGE
     if (view === 'LANDING') {
         return (
-            <div className="min-h-screen bg-[#061814] text-emerald-50 flex items-center justify-center p-6 relative overflow-hidden">
+            <div className="min-h-[100dvh] bg-[#061814] text-emerald-50 flex items-center justify-center p-4 md:p-6 relative overflow-y-auto">
                 <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?q=80&w=2669&auto=format&fit=crop')] bg-cover bg-center opacity-20 filter blur-sm"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#061814] via-[#061814]/80 to-transparent"></div>
 
                 {/* Main Content */}
-                <div className="relative z-10 max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
-                    <div className="mb-8 p-8 bg-black/20 backdrop-blur-md rounded-3xl border border-white/5 shadow-2xl">
-                        <h1 className={`${playfair.className} text-5xl md:text-6xl text-yellow-500 mb-2 drop-shadow-lg`}>MIVIS</h1>
-                        <p className="text-emerald-200/80 tracking-[0.4em] text-sm uppercase">Studio & Beauty</p>
+                <div className="relative z-10 max-w-md w-full text-center space-y-6 md:space-y-8 animate-in fade-in zoom-in duration-500">
+                    <div className="mb-4 md:mb-8 p-6 md:p-8 bg-black/20 backdrop-blur-md rounded-3xl border border-white/5 shadow-2xl">
+                        <h1 className={`${playfair.className} text-4xl md:text-6xl text-yellow-500 mb-2 drop-shadow-lg`}>MIVIS</h1>
+                        <p className="text-emerald-200/80 tracking-[0.4em] text-[10px] md:text-sm uppercase">Studio & Beauty</p>
                     </div>
 
                     <div className="flex gap-4">
@@ -519,8 +519,8 @@ export default function StudioSystem() {
     // 2. WORKER SELECT
     if (view === 'WORKER_SELECT') {
         return (
-            <div className="min-h-screen bg-[#0f2a24] p-6 flex flex-col items-center justify-center">
-                <button onClick={() => setView('LANDING')} className="absolute top-6 left-6 text-white/50 hover:text-white flex items-center gap-2"><div className="p-2 bg-white/5 rounded-full"><ChevronRight className="w-5 h-5 rotate-180" /></div> Regresar</button>
+            <div className="min-h-[100dvh] bg-[#0f2a24] p-4 md:p-6 flex flex-col items-center justify-center overflow-y-auto">
+                <button onClick={() => setView('LANDING')} className="fixed top-4 left-4 md:top-6 md:left-6 z-50 text-white/50 hover:text-white flex items-center gap-2 bg-black/20 backdrop-blur-md p-2 rounded-full md:rounded-xl border border-white/10 shadow-lg md:bg-transparent md:border-none md:shadow-none"><div className="p-1 md:p-2 bg-white/5 rounded-full"><ChevronRight className="w-4 h-4 md:w-5 md:h-5 rotate-180" /></div> <span className="hidden md:inline">Regresar</span></button>
                 <h2 className={`${playfair.className} text-4xl text-white mb-2 text-center`}>¿Quién eres?</h2>
                 <p className="text-white/40 mb-10 text-center">Selecciona tu perfil para ingresar</p>
 
@@ -533,14 +533,14 @@ export default function StudioSystem() {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => { setCurrentWorker(emp); setView('WORKER_LOGIN'); setPinInput(""); }}
-                                className={`${colorClass} p-6 rounded-2xl flex flex-col items-center gap-4 border-2 transition-all shadow-lg`}
+                                className={`${colorClass} p-4 md:p-6 rounded-2xl flex flex-col items-center gap-3 md:gap-4 border-2 transition-all shadow-lg`}
                             >
-                                <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 shadow-md">
+                                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-white/20 shadow-md">
                                     <img src={emp.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.avatarSeed}`} className="w-full h-full object-cover bg-white" alt={emp.name} />
                                 </div>
                                 <div className="text-center">
-                                    <h3 className={`font-bold text-lg leading-tight uppercase`}>{emp.name}</h3>
-                                    <p className="text-xs opacity-70 mt-1">{emp.role}</p>
+                                    <h3 className={`font-bold text-sm md:text-lg leading-tight uppercase`}>{emp.name}</h3>
+                                    <p className="text-[10px] md:text-xs opacity-70 mt-1">{emp.role}</p>
                                 </div>
                             </motion.button>
                         );
@@ -553,7 +553,7 @@ export default function StudioSystem() {
     // 2.5 WORKER LOGIN
     if (view === 'WORKER_LOGIN' && currentWorker) {
         return (
-            <div className="min-h-screen bg-[#0f2a24] flex items-center justify-center p-4">
+            <div className="min-h-[100dvh] bg-[#0f2a24] flex items-center justify-center p-4 overflow-y-auto">
                 <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
                     <div className="flex justify-center mb-6">
                         <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-20 h-20 rounded-full border-4 border-yellow-500 bg-white" alt={currentWorker.name} />
@@ -598,9 +598,8 @@ export default function StudioSystem() {
     // 3. WORKER DASHBOARD
     if (view === 'WORKER_DASHBOARD' && currentWorker) {
         const myBookings = bookings.filter(b => b.professionalId === currentWorker.id && (b.status === 'confirmed' || b.status === 'completed' || b.status === 'pending'));
-
         return (
-            <div className="min-h-screen bg-[#0f2a24] p-6">
+            <div className="min-h-[100dvh] bg-[#0f2a24] p-4 md:p-6 overflow-y-auto">
                 <header className="flex justify-between items-center mb-8 max-w-xl mx-auto">
                     <div className="flex items-center gap-3">
                         <img src={currentWorker.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentWorker.avatarSeed}`} className="w-12 h-12 rounded-full border border-white/20 bg-white" alt={currentWorker.name} />
@@ -687,7 +686,7 @@ export default function StudioSystem() {
     // 2. PIN ENTRY (ADMIN LOGIN)
     if (view === 'PIN_ENTRY') {
         return (
-            <div className="min-h-screen bg-[#0f2a24] flex items-center justify-center p-4">
+            <div className="min-h-[100dvh] bg-[#0f2a24] flex items-center justify-center p-4 overflow-y-auto">
                 <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="max-w-xs w-full bg-black/20 p-8 rounded-3xl border border-white/5 backdrop-blur-xl text-center">
                     <Lock className="w-8 h-8 text-yellow-500 mx-auto mb-6" />
                     <h2 className={`${playfair.className} text-2xl text-white mb-6`}>Acceso Privado</h2>
@@ -717,19 +716,19 @@ export default function StudioSystem() {
     // 3. CLIENT BOOKING VIEW (UPDATED 💎 WITH CUSTOM BG)
     if (view === 'CLIENT_BOOKING') {
         return (
-            <div className="min-h-screen bg-[#061814] text-[#e0e7e4] font-sans flex flex-col relative overflow-hidden">
+            <div className="min-h-[100dvh] bg-[#061814] text-[#e0e7e4] font-sans flex flex-col relative overflow-y-auto">
                 {/* 🏷️ Fondo Personalizado: Asegúrate de guardar 'fondo.jpeg' en la carpeta public */}
                 <div className="absolute inset-0 bg-[url('/fondo.jpeg')] bg-cover bg-center opacity-40 blur-[3px]"></div>
                 <div className="absolute inset-0 bg-gradient-to-br from-[#061814]/90 via-[#061814]/60 to-transparent"></div>
 
-                <div className="p-6 relative z-10"><button onClick={() => setView('LANDING')} className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white hover:bg-white/20 hover:scale-105 transition-all flex items-center gap-2 text-sm border border-white/5 shadow-lg"><ChevronRight className="rotate-180 w-4 h-4" /> Volver al Inicio</button></div>
+                <div className="p-4 md:p-6 relative z-10"><button onClick={() => setView('LANDING')} className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full text-white hover:bg-white/20 hover:scale-105 transition-all flex items-center gap-2 text-sm border border-white/5 shadow-lg"><ChevronRight className="rotate-180 w-4 h-4" /> Volver</button></div>
 
                 <div className="flex-1 flex flex-col items-center justify-center p-4 relative z-10">
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-lg bg-[#0f2a24]/60 backdrop-blur-xl rounded-[2.5rem] p-8 md:p-10 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                        <div className="text-center mb-8">
-                            <h1 className={`${playfair.className} text-4xl text-yellow-500 mb-2 drop-shadow-sm`}>Tu Cita</h1>
-                            <div className="h-1 w-16 bg-gradient-to-r from-transparent via-emerald-500 to-transparent mx-auto rounded-full mb-3"></div>
-                            <p className="text-emerald-100/70 text-sm font-light">Completa tus datos para brillar hoy.</p>
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-lg bg-[#0f2a24]/60 backdrop-blur-xl rounded-[2.5rem] p-6 md:p-10 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                        <div className="text-center mb-6 md:mb-8">
+                            <h1 className={`${playfair.className} text-3xl md:text-4xl text-yellow-500 mb-2 drop-shadow-sm`}>Tu Cita</h1>
+                            <div className="h-1 w-12 md:w-16 bg-gradient-to-r from-transparent via-emerald-500 to-transparent mx-auto rounded-full mb-3"></div>
+                            <p className="text-emerald-100/70 text-xs md:text-sm font-light">Completa tus datos para brillar hoy.</p>
                         </div>
                         <BookingForm services={services} employees={employees} onSubmit={handleBooking} isClient={true} />
                     </motion.div>
@@ -740,9 +739,9 @@ export default function StudioSystem() {
 
     // 4. ADMIN DASHBOARD (The Full System)
     return (
-        <div className={`min-h-screen bg-[#0f2a24] text-[#e0e7e4] font-sans pb-20 selection:bg-yellow-500 selection:text-black`}>
+        <div className={`min-h-[100dvh] bg-[#0f2a24] text-[#e0e7e4] font-sans pb-24 selection:bg-yellow-500 selection:text-black overflow-y-auto`}>
             {/* Admin Header */}
-            <header className="sticky top-0 z-20 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center bg-[#0f2a24]/80">
+            <header className="sticky top-0 z-20 backdrop-blur-xl border-b border-white/10 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center bg-[#0f2a24]/80">
                 <div className="flex items-center gap-2">
                     <Store className="w-5 h-5 text-yellow-500" />
                     <div>
@@ -762,7 +761,7 @@ export default function StudioSystem() {
             </header>
 
             {/* Mobile Tab Bar */}
-            <div className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/80 backdrop-blur-xl p-2 rounded-full border border-white/10 shadow-2xl z-30">
+            <div className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/80 backdrop-blur-xl p-2 rounded-full border border-white/10 shadow-2xl z-30 mb-[env(safe-area-inset-bottom)]">
                 <NavBtn icon={<Users />} label="" active={activeTab === 'HOME'} onClick={() => setActiveTab('HOME')} />
                 <NavBtn icon={<Calendar />} label="" active={activeTab === 'BOOKINGS'} onClick={() => setActiveTab('BOOKINGS')} />
                 <NavBtn icon={<Wallet />} label="" active={activeTab === 'FINANCE'} onClick={() => setActiveTab('FINANCE')} />
@@ -1544,16 +1543,16 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             <div>
                 <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Tus Datos</label>
                 <div className="space-y-3">
-                    <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
-                    <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
-                    <p className="text-yellow-500 font-bold text-xs uppercase tracking-wide mt-2 ml-1">⚠️ LA CITA SE RESERVA CON EL 50% DEL SERVICIO</p>
+                    <input placeholder="Nombre Completo" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-3 md:py-4 px-4 md:px-5 rounded-2xl" value={cName} onChange={e => setCName(e.target.value)} />
+                    <input placeholder="Teléfono" type="tel" className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-3 md:py-4 px-4 md:px-5 rounded-2xl" value={cPhone} onChange={e => setCPhone(e.target.value)} />
+                    <p className="text-yellow-500 font-bold text-[10px] md:text-xs uppercase tracking-wide mt-2 ml-1">⚠️ LA CITA SE RESERVA CON EL 50% DEL SERVICIO</p>
                 </div>
             </div>
 
             <div>
                 <label id="lbl-book-serv" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">¿Qué te harás hoy?</label>
                 <div className="relative">
-                    <select aria-labelledby="lbl-book-serv" className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
+                    <select aria-labelledby="lbl-book-serv" className="input-modern w-full appearance-none bg-black/40 border-white/10 py-3 md:py-4 px-4 md:px-5 rounded-2xl focus:border-yellow-500/50" value={bService} onChange={e => setBService(e.target.value)}><option value="">Servicio...</option>{services.map((s: ServiceItem) => <option key={s.id} value={s.name} className="bg-neutral-900">{s.name}</option>)}</select>
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">▼</div>
                 </div>
             </div>
@@ -1564,7 +1563,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                     <div>
                         <label id="lbl-book-pro" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Asignar Profesional (Opcional)</label>
                         <div className="relative">
-                            <select aria-labelledby="lbl-book-pro" className="input-modern w-full appearance-none bg-black/40 border-white/10 py-4 px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
+                            <select aria-labelledby="lbl-book-pro" className="input-modern w-full appearance-none bg-black/40 border-white/10 py-3 md:py-4 px-4 md:px-5 rounded-2xl focus:border-yellow-500/50" value={bProf} onChange={e => setBProf(e.target.value)}>
                                 <option value="">Ninguno (Pendiente)</option>
                                 {employees.map((emp: Employee) => <option key={emp.id} value={emp.id} className="bg-neutral-900">{emp.name}</option>)}
                             </select>
@@ -1576,7 +1575,7 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
                         <label className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Notas / Descripción (Opcional)</label>
                         <textarea
                             placeholder="Detalles adicionales, alergias, preferencias..."
-                            className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-4 px-5 rounded-2xl min-h-[100px] resize-none"
+                            className="input-modern bg-black/40 border-white/10 focus:bg-black/60 focus:border-yellow-500/50 py-3 md:py-4 px-4 md:px-5 rounded-2xl min-h-[80px] md:min-h-[100px] resize-none"
                             value={bDesc}
                             onChange={e => setBDesc(e.target.value)}
                         />
@@ -1588,16 +1587,16 @@ function BookingForm({ employees, services, onSubmit, isClient }: BookingFormPro
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label id="lbl-book-date" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Fecha</label>
-                    <input aria-labelledby="lbl-book-date" type="date" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bDate} onChange={e => setBDate(e.target.value)} />
+                    <input aria-labelledby="lbl-book-date" type="date" className="input-modern calendar-fix w-full bg-white text-black font-bold py-3 md:py-4 px-3 md:px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bDate} onChange={e => setBDate(e.target.value)} />
                 </div>
                 <div>
                     <label id="lbl-book-time" className="text-xs text-emerald-100/50 font-bold uppercase ml-2 mb-1 block">Hora</label>
-                    <input aria-labelledby="lbl-book-time" type="time" className="input-modern calendar-fix w-full bg-white text-black font-bold py-4 px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bTime} onChange={e => setBTime(e.target.value)} />
+                    <input aria-labelledby="lbl-book-time" type="time" className="input-modern calendar-fix w-full bg-white text-black font-bold py-3 md:py-4 px-3 md:px-4 rounded-2xl border-none focus:ring-2 focus:ring-yellow-500" value={bTime} onChange={e => setBTime(e.target.value)} />
                 </div>
             </div>
             </div>
 
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleSubmit} className="btn-primary w-full py-4 mt-4 flex justify-center gap-3 items-center text-sm uppercase tracking-widest shadow-xl shadow-yellow-600/20 hover:shadow-yellow-600/40">
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleSubmit} className="btn-primary w-full py-3 md:py-4 mt-2 md:mt-4 flex justify-center gap-3 items-center text-xs md:text-sm uppercase tracking-widest shadow-xl shadow-yellow-600/20 hover:shadow-yellow-600/40">
                 {isClient ? 'Confirmar Cita' : 'Agendar Reserva'} <CheckCircle2 className="w-5 h-5" />
             </motion.button>
         </div>
@@ -1608,6 +1607,7 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
     const [amt, setAmt] = useState('');
     const [desc, setDesc] = useState('');
     const [cat, setCat] = useState(EXPENSE_CATS[0]);
+    const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
     const [historyPeriod, setHistoryPeriod] = useState<'week' | 'month'>('week');
     const [offset, setOffset] = useState(0); // Added for navigation
 
@@ -1652,9 +1652,12 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
 
     const handleSaveExpense = () => {
         if (!amt) return;
-        onAdd({ category: cat, amount: parseFloat(amt), description: desc });
+        const selectedDate = new Date(expDate + 'T12:00:00'); // Use noon to avoid timezone shifts
+        onAdd({ category: cat, amount: parseFloat(amt), description: desc, date: selectedDate });
         setAmt('');
         setDesc('');
+        // Reset date to today after saving? Optionally keep it if registering multiple old ones.
+        // setExpDate(new Date().toISOString().split('T')[0]); 
     };
 
     return (
@@ -1710,6 +1713,17 @@ function FinanceSection({ transactions, expenses, onAdd, onDelete, onReset }: Fi
                         <div>
                             <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Nota (Opcional)</label>
                             <input type="text" placeholder="Ej. Pago recibo..." className="input-modern" value={desc} onChange={e => setDesc(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-white/50 uppercase ml-1 block mb-1">Fecha de Gasto</label>
+                            <input
+                                type="date"
+                                className="input-modern bg-white text-black font-bold h-12"
+                                value={expDate}
+                                onChange={e => setExpDate(e.target.value)}
+                                aria-label="Fecha del gasto"
+                            />
+                            <p className="text-[10px] text-yellow-500/60 mt-1 ml-1">Puedes cambiar la fecha para registrar gastos pasados.</p>
                         </div>
                         <button onClick={handleSaveExpense} className="btn-primary w-full py-4 mt-2 bg-rose-600 from-rose-600 to-rose-500 shadow-rose-900/30 text-white">Guardar Gasto</button>
                     </div>
@@ -2143,6 +2157,7 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                                         onChange={e => setTempName(e.target.value)}
                                         className="w-full bg-black/40 border border-white/20 rounded px-2 py-1 text-xs text-white outline-none focus:border-yellow-500"
                                         placeholder="Servicio"
+                                        aria-label="Nombre del servicio"
                                         autoFocus
                                     />
                                     <input
@@ -2151,6 +2166,7 @@ function ReportListBlock({ title, transactions, onSend, onEdit, onDelete }: {
                                         onChange={e => setTempPrice(e.target.value)}
                                         className="w-24 bg-black/40 border border-white/20 rounded px-2 py-1 text-xs text-white outline-none focus:border-yellow-500 font-mono"
                                         placeholder="Precio"
+                                        aria-label="Precio del servicio"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-1">
@@ -2215,9 +2231,9 @@ type StatCardProps = { label: string; val: number; icon: React.ReactNode; color:
 function StatCard({ label, val, icon, color, bg }: StatCardProps) { return (<div className={`p-6 rounded-2xl border border-white/5 ${bg}`}><div className={`flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider ${color}`}>{icon} {label}</div><div className={`text-3xl font-mono font-bold ${color}`}>S/. {val.toFixed(2)}</div></div>); }
 
 type NavBtnProps = { icon: React.ReactNode; label?: string; active: boolean; onClick: () => void; };
-function NavBtn({ icon, label, active, onClick }: NavBtnProps) { return (<button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
+function NavBtn({ icon, label, active, onClick }: NavBtnProps) { return (<button onClick={onClick} aria-label={label || 'Botón de navegación'} title={label} className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-sm font-medium ${active ? 'bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-emerald-950/30 border-white/5 text-white/40 hover:text-white hover:border-white/20'}`}>{icon}{label && <span className="hidden leading-none sm:inline">{label}</span>}</button>) }
 
-function Modal({ children, onClose }: { children: React.ReactNode, onClose: () => void }) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }
+function Modal({ children, onClose }: { children: React.ReactNode, onClose: () => void }) { return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a1f1a]/90 backdrop-blur-md" onClick={onClose}><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#132f29] w-full max-w-sm rounded-[2rem] p-6 md:p-8 border border-white/10 shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-yellow-500/50 blur-[10px] rounded-full"></div>{children}</motion.div></div>) }
 
 function SmartNotificationAssistant({ workerId }: { workerId: string }) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
